@@ -1,3 +1,4 @@
+import AdminStatsCards from '@/components/AdminStatsCards';
 import { ROLE_LABEL } from '@/components/AppLayout';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+
+      {user.role === 'admin' && <AdminStatsCards />}
 
       <Card className="max-w-md">
         <CardHeader>

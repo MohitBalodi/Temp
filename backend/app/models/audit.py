@@ -3,9 +3,10 @@ from typing import Any
 
 from sqlalchemy import DDL, BigInteger, DateTime, ForeignKey, String, event, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+from app.models.user import User
 
 
 class AuditLog(Base):
@@ -24,6 +25,12 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+    actor: Mapped[User | None] = relationship(lazy="joined")
+
+    @property
+    def actor_email(self) -> str | None:
+        return self.actor.email if self.actor else None
 
 
 # Shared by the Alembic migration and by `create_all` (tests), so both get it.

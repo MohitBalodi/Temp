@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/certificates/import', label: 'Import CSV', roles: ['institution'] },
   { to: '/verify', label: 'Verify', roles: ['verifier', 'admin'] },
   { to: '/verifications', label: 'History', roles: ['verifier', 'admin'] },
+  { to: '/admin/audit', label: 'Audit log', roles: ['admin'] },
 ];
 
 /** Page chrome for logged-in pages. Rendered inside ProtectedRoute. */
@@ -41,9 +42,11 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-muted/40">
       <header className="border-b bg-background print:hidden">
-        <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <span className="font-semibold">Authenticity Validator</span>
-          <nav className="flex flex-1 gap-1 overflow-x-auto">
+          {/* Wraps to a second row rather than scrolling: an admin has five
+              items and they must all stay clickable on a laptop. */}
+          <nav className="order-last flex w-full flex-wrap gap-1 sm:order-none sm:w-auto sm:flex-1">
             {items.map((item) => (
               <NavLink
                 key={item.to}

@@ -30,7 +30,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description Both outcomes are written to the audit log; a failure keeps only the
+         *     email's domain.
+         */
         post: operations["login_api_v1_auth_login_post"];
         delete?: never;
         options?: never;
@@ -224,10 +228,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Log */
+        get: operations["audit_log_api_v1_admin_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stats */
+        get: operations["stats_api_v1_admin_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdminStats */
+        AdminStats: {
+            /** Institutions */
+            institutions: number;
+            /** Users */
+            users: number;
+            /** Certificates */
+            certificates: number;
+            /** Certificates Revoked */
+            certificates_revoked: number;
+            /** Verifications */
+            verifications: number;
+            verifications_by_result: components["schemas"]["ResultCounts"];
+            /** @description Rolling window, not calendar weeks. */
+            last_7_days: components["schemas"]["RecentCounts"];
+        };
+        /**
+         * AuditOut
+         * @description One audit row. `meta` never holds personal data — identifiers, counts
+         *     and, for a failed login, the email's domain only.
+         */
+        AuditOut: {
+            /** Id */
+            id: number;
+            /** Actor Id */
+            actor_id: number | null;
+            /** Actor Email */
+            actor_email?: string | null;
+            /** Action */
+            action: string;
+            /** Entity */
+            entity: string;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Meta */
+            meta: Record<string, never>;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** Body_import_certificates_api_v1_certificates_import_post */
         Body_import_certificates_api_v1_certificates_import_post: {
             /**
@@ -378,6 +458,17 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Page[AuditOut] */
+        Page_AuditOut_: {
+            /** Items */
+            items: components["schemas"]["AuditOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /** Page[CertificateOut] */
         Page_CertificateOut_: {
             /** Items */
@@ -400,10 +491,56 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** RecentCounts */
+        RecentCounts: {
+            /**
+             * Certificates
+             * @default 0
+             */
+            certificates: number;
+            /**
+             * Verifications
+             * @default 0
+             */
+            verifications: number;
+            /**
+             * Logins
+             * @default 0
+             */
+            logins: number;
+            /**
+             * Failed Logins
+             * @default 0
+             */
+            failed_logins: number;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** ResultCounts */
+        ResultCounts: {
+            /**
+             * Verified
+             * @default 0
+             */
+            VERIFIED: number;
+            /**
+             * Mismatch
+             * @default 0
+             */
+            MISMATCH: number;
+            /**
+             * Revoked
+             * @default 0
+             */
+            REVOKED: number;
+            /**
+             * Manual Review
+             * @default 0
+             */
+            MANUAL_REVIEW: number;
         };
         /**
          * Role
@@ -931,6 +1068,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_log_api_v1_admin_audit_get: {
+        parameters: {
+            query?: {
+                /** @description Action prefix, e.g. certificate. or auth. */
+                action?: string | null;
+                /** @description Inclusive, UTC. */
+                date_from?: string | null;
+                /** @description Inclusive, UTC. */
+                date_to?: string | null;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AuditOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stats_api_v1_admin_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStats"];
                 };
             };
         };

@@ -11,13 +11,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenPair)
 def login(body: LoginRequest, db: DbSession) -> TokenPair:
-    user = auth_service.authenticate(db, body.email, body.password)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "invalid_credentials", "message": "Email or password is incorrect."},
-        )
-    return auth_service.issue_tokens(user)
+    """Both outcomes are written to the audit log; a failure keeps only the
+    email's domain."""
+    return auth_service.login(db, body.email, body.password)
 
 
 @router.post("/refresh", response_model=TokenPair)

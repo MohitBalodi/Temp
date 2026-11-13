@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster';
 import Certificates from '@/pages/Certificates';
 import Dashboard from '@/pages/Dashboard';
 import ImportCertificates from '@/pages/ImportCertificates';
+import AuditLog from '@/pages/AuditLog';
 import Login from '@/pages/Login';
 import MyVerifications from '@/pages/MyVerifications';
 import VerificationDetail from '@/pages/VerificationDetail';
@@ -54,6 +55,9 @@ export default function App() {
               />
               <Route path="/verifications" element={<MyVerifications />} />
               <Route path="/verifications/:id" element={<VerificationDetail />} />
+            </Route>
+            <Route element={<ProtectedRoute roles={['admin']} />}>
+              <Route path="/admin/audit" element={<AuditLog />} />
             </Route>
           </Route>
         </Route>
