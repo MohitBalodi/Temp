@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api } from '@/api/client';
 import type { components } from '@/api/schema';
+import { saveBlob } from '@/lib/download';
 
 export type Certificate = components['schemas']['CertificateOut'];
 export type CertificateCreate = components['schemas']['CertificateCreate'];
@@ -49,5 +50,18 @@ export function useImportCertificates() {
       return (await api.post<ImportResult>('/certificates/import', form)).data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/** Download the PDF that was issued with the certificate (served as stored,
+ * never regenerated, so its SHA-256 still matches `file_sha256`). */
+export function useDownloadCertificatePdf() {
+  return useMutation({
+    mutationFn: async (cert: Pick<Certificate, 'id' | 'cert_number'>) => {
+      const { data } = await api.get<Blob>(`/certificates/${cert.id}/pdf`, {
+        responseType: 'blob',
+      });
+      saveBlob(data, `${cert.cert_number}.pdf`);
+    },
   });
 }

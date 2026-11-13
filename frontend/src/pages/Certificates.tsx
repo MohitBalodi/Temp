@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Search, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Search, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -17,8 +17,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useMe } from '@/hooks/useAuth';
-import { useCertificates } from '@/hooks/useCertificates';
+import { useCertificates, useDownloadCertificatePdf } from '@/hooks/useCertificates';
 import { useDebounced } from '@/hooks/useDebounced';
+import { useToast } from '@/hooks/use-toast';
 
 const PAGE_SIZE = 20;
 
@@ -28,11 +29,24 @@ export default function Certificates() {
   const [page, setPage] = useState(1);
   const q = useDebounced(search.trim());
   const list = useCertificates({ q, page, size: PAGE_SIZE });
+  const { toast } = useToast();
+  const download = useDownloadCertificatePdf();
 
   const isInstitution = user?.role === 'institution';
   const isAdmin = user?.role === 'admin';
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const columnCount = isAdmin ? 9 : 8;
+
+  const downloadPdf = (cert: { id: string; cert_number: string }) =>
+    download.mutate(cert, {
+      onError: (error) =>
+        toast({
+          title: 'Download failed',
+          description: apiErrorMessage(error, 'The issued PDF is not available.'),
+          variant: 'destructive',
+        }),
+    });
 
   return (
     <div className="space-y-6">
@@ -85,26 +99,27 @@ export default function Certificates() {
               <TableHead className="text-right">CGPA / Marks</TableHead>
               {isAdmin && <TableHead>Institution</TableHead>}
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">PDF</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {list.isPending && (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={columnCount} className="py-8 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {list.isError && (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-destructive">
+                <TableCell colSpan={columnCount} className="py-8 text-center text-destructive">
                   {apiErrorMessage(list.error)}
                 </TableCell>
               </TableRow>
             )}
             {list.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={columnCount} className="py-8 text-center text-muted-foreground">
                   {q ? `No certificates match “${q}”.` : 'No certificates yet.'}
                 </TableCell>
               </TableRow>
@@ -124,6 +139,18 @@ export default function Certificates() {
                   <Badge variant={c.status === 'active' ? 'secondary' : 'destructive'}>
                     {c.status}
                   </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={download.isPending && download.variables?.id === c.id}
+                    onClick={() => downloadPdf(c)}
+                    aria-label={`Download PDF for ${c.cert_number}`}
+                    title="Download the issued PDF"
+                  >
+                    <Download />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

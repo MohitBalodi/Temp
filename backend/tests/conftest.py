@@ -86,6 +86,14 @@ def keys_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def issued_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Issued certificate PDFs go to a per-test temp dir, never the real volume."""
+    path = tmp_path / "issued"
+    monkeypatch.setattr(settings, "issued_dir", str(path))
+    return path
+
+
 def make_institution(db: Session, code: str, name: str) -> Institution:
     key = load_or_create_private_key(code)
     inst = Institution(name=name, code=code, public_key=public_key_pem(key))

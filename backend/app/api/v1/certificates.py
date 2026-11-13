@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi.responses import FileResponse
 
 from app.core.deps import DbSession, require_role
 from app.models import Certificate, Role, User
@@ -54,3 +55,25 @@ def list_certificates(
 @router.get("/{certificate_id}", response_model=CertificateOut)
 def get_certificate(certificate_id: uuid.UUID, user: RegistryReader, db: DbSession) -> Certificate:
     return service.get_certificate(db, user, certificate_id)
+
+
+@router.get(
+    "/{certificate_id}/pdf",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"application/pdf": {}}, "description": "The issued certificate PDF"},
+        404: {"description": "Certificate not found, or no PDF stored for it"},
+    },
+)
+def get_certificate_pdf(
+    certificate_id: uuid.UUID, user: RegistryReader, db: DbSession
+) -> FileResponse:
+    """Serve the PDF generated when the certificate was issued, byte for byte,
+    so its SHA-256 still matches `file_sha256`. It is never regenerated."""
+    cert = service.get_certificate(db, user, certificate_id)
+    return FileResponse(
+        service.issued_pdf(cert),
+        media_type="application/pdf",
+        filename=f"{cert.cert_number}.pdf",
+        headers={"X-Certificate-SHA256": cert.file_sha256 or ""},
+    )
