@@ -10,6 +10,7 @@ import Certificates from '@/pages/Certificates';
 import Dashboard from '@/pages/Dashboard';
 import ImportCertificates from '@/pages/ImportCertificates';
 import Login from '@/pages/Login';
+import Verify from '@/pages/Verify';
 
 export default function App() {
   const navigate = useNavigate();
@@ -36,6 +37,9 @@ export default function App() {
             </Route>
             <Route element={<ProtectedRoute roles={['institution']} />}>
               <Route path="/certificates/import" element={<ImportCertificates />} />
+            </Route>
+            <Route element={<ProtectedRoute roles={['verifier', 'admin']} />}>
+              <Route path="/verify" element={<Verify />} />
             </Route>
           </Route>
         </Route>

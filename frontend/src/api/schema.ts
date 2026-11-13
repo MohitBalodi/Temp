@@ -145,6 +145,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/verify/id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify By Id
+         * @description Verify by certificate number. Always returns a result with its evidence;
+         *     an unknown number is MANUAL_REVIEW, never an accusation.
+         */
+        post: operations["verify_by_id_api_v1_verify_id_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/verify/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify By Qr
+         * @description Verify a scanned QR payload: the signature it carries is re-checked
+         *     against the registry record and the institution's public key.
+         */
+        post: operations["verify_by_qr_api_v1_verify_qr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/verifications/{verification_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Verification */
+        get: operations["get_verification_api_v1_verifications__verification_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -229,6 +288,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * CheckOut
+         * @description One piece of evidence. `status` is pass | fail | skipped | uncertain.
+         */
+        CheckOut: {
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -344,6 +415,48 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VerificationOut */
+        VerificationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Method */
+            method: string;
+            /**
+             * Result
+             * @description VERIFIED | MISMATCH | REVOKED | MANUAL_REVIEW
+             */
+            result: string;
+            /** Checks */
+            checks: components["schemas"]["CheckOut"][];
+            /** @description The registry record, when one was found. */
+            certificate?: components["schemas"]["CertificateOut"] | null;
+            /**
+             * Extracted Fields
+             * @description What the request itself carried (number, QR fields).
+             */
+            extracted_fields?: Record<string, never> | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** VerifyByIdRequest */
+        VerifyByIdRequest: {
+            /** Cert Number */
+            cert_number: string;
+        };
+        /** VerifyByQrRequest */
+        VerifyByQrRequest: {
+            /**
+             * Payload
+             * @description The text decoded from the QR code.
+             */
+            payload: string;
         };
     };
     responses: never;
@@ -619,6 +732,101 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_by_id_api_v1_verify_id_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_by_qr_api_v1_verify_qr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyByQrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description The payload is not a certificate QR code */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_verification_api_v1_verifications__verification_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                verification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOut"];
+                };
             };
             /** @description Validation Error */
             422: {

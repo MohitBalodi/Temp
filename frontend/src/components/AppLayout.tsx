@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/certificates', label: 'Certificates', roles: ['institution', 'admin'] },
   { to: '/certificates/import', label: 'Import CSV', roles: ['institution'] },
+  { to: '/verify', label: 'Verify', roles: ['verifier', 'admin'] },
 ];
 
 /** Page chrome for logged-in pages. Rendered inside ProtectedRoute. */
