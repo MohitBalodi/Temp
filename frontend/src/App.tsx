@@ -10,6 +10,7 @@ import Certificates from '@/pages/Certificates';
 import Dashboard from '@/pages/Dashboard';
 import ImportCertificates from '@/pages/ImportCertificates';
 import AuditLog from '@/pages/AuditLog';
+import Institutions from '@/pages/Institutions';
 import Login from '@/pages/Login';
 import MyVerifications from '@/pages/MyVerifications';
 import VerificationDetail from '@/pages/VerificationDetail';
@@ -58,6 +59,7 @@ export default function App() {
             </Route>
             <Route element={<ProtectedRoute roles={['admin']} />}>
               <Route path="/admin/audit" element={<AuditLog />} />
+              <Route path="/admin/institutions" element={<Institutions />} />
             </Route>
           </Route>
         </Route>

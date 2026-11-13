@@ -31,6 +31,10 @@ def authenticate(db: Session, email: str, password: str) -> User | None:
         return None
     if not verify_password(password, user.password_hash) or not user.is_active:
         return None
+    # A deactivated institution keeps its certificates verifiable, but its
+    # people can no longer sign in.
+    if user.institution is not None and not user.institution.is_active:
+        return None
     return user
 
 

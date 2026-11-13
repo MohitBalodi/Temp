@@ -36,6 +36,7 @@ class RecentCounts(BaseModel):
 
 class AdminStats(BaseModel):
     institutions: int
+    institutions_active: int
     users: int
     certificates: int
     certificates_revoked: int

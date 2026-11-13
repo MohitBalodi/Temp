@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/certificates/import', label: 'Import CSV', roles: ['institution'] },
   { to: '/verify', label: 'Verify', roles: ['verifier', 'admin'] },
   { to: '/verifications', label: 'History', roles: ['verifier', 'admin'] },
+  { to: '/admin/institutions', label: 'Institutions', roles: ['admin'] },
   { to: '/admin/audit', label: 'Audit log', roles: ['admin'] },
 ];
 

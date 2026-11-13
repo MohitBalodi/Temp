@@ -67,6 +67,9 @@ def stats(db: Session) -> dict[str, Any]:
 
     return {
         "institutions": _count(db, select(Institution)),
+        "institutions_active": _count(
+            db, select(Institution).where(Institution.is_active.is_(True))
+        ),
         "users": _count(db, select(User)),
         "certificates": _count(db, select(Certificate)),
         "certificates_revoked": _count(

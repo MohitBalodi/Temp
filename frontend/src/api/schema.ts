@@ -76,6 +76,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/institutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Institutions */
+        get: operations["list_institutions_api_v1_institutions_get"];
+        put?: never;
+        /**
+         * Create Institution
+         * @description Create an institution, generate its Ed25519 keypair (private key to
+         *     KEYS_DIR, public key to the row) and its first user. The generated password
+         *     is returned once and never again.
+         */
+        post: operations["create_institution_api_v1_institutions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Institution */
+        get: operations["get_institution_api_v1_institutions__institution_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Institution */
+        delete: operations["delete_institution_api_v1_institutions__institution_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Institution
+         * @description Name and active flag only — the code and key are what signatures refer to.
+         */
+        patch: operations["update_institution_api_v1_institutions__institution_id__patch"];
+        trace?: never;
+    };
     "/api/v1/certificates": {
         parameters: {
             query?: never;
@@ -270,6 +315,8 @@ export interface components {
         AdminStats: {
             /** Institutions */
             institutions: number;
+            /** Institutions Active */
+            institutions_active: number;
             /** Users */
             users: number;
             /** Certificates */
@@ -442,6 +489,59 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** InstitutionCreate */
+        InstitutionCreate: {
+            /** Name */
+            name: string;
+            /** Code */
+            code: string;
+            /**
+             * Admin Email
+             * @description Email of the institution's first user.
+             */
+            admin_email: string;
+        };
+        /**
+         * InstitutionCreated
+         * @description The one and only time the generated password is returned.
+         */
+        InstitutionCreated: {
+            institution: components["schemas"]["InstitutionOut"];
+            user: components["schemas"]["UserOut"];
+            /**
+             * Password
+             * @description Shown once. It is not stored in plain text anywhere.
+             */
+            password: string;
+        };
+        /** InstitutionOut */
+        InstitutionOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Public Key */
+            public_key: string;
+            /**
+             * Certificate Count
+             * @default 0
+             */
+            certificate_count: number;
+            /**
+             * User Count
+             * @default 0
+             */
+            user_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** InstitutionSummary */
         InstitutionSummary: {
             /** Id */
@@ -450,6 +550,17 @@ export interface components {
             name: string;
             /** Code */
             code: string;
+        };
+        /**
+         * InstitutionUpdate
+         * @description Only the display name and the active flag can change. The code and the
+         *     key are fixed: signatures already issued refer to them.
+         */
+        InstitutionUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -473,6 +584,17 @@ export interface components {
         Page_CertificateOut_: {
             /** Items */
             items: components["schemas"]["CertificateOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
+        /** Page[InstitutionOut] */
+        Page_InstitutionOut_: {
+            /** Items */
+            items: components["schemas"]["InstitutionOut"][];
             /** Total */
             total: number;
             /** Page */
@@ -772,6 +894,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    list_institutions_api_v1_institutions_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_InstitutionOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_institution_api_v1_institutions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_institution_api_v1_institutions__institution_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_institution_api_v1_institutions__institution_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The institution has certificates; deactivate it instead */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_institution_api_v1_institutions__institution_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
