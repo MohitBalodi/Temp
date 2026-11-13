@@ -114,6 +114,24 @@ class CertificateOut(BaseModel):
     created_at: datetime
 
 
+class RevokeRequest(BaseModel):
+    """Revocation always carries a reason: the audit trail should say why."""
+
+    reason: str = Field(
+        min_length=3,
+        max_length=500,
+        examples=["Issued in error — duplicate record"],
+    )
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        out = clean_text(v)
+        if len(out) < 3:
+            raise ValueError("must say why the certificate is being revoked")
+        return out
+
+
 class ImportResult(BaseModel):
     imported: int
 

@@ -10,6 +10,7 @@ export type CertificatePage = components['schemas']['Page_CertificateOut_'];
 export type ImportResult = components['schemas']['ImportResult'];
 export type ImportRowError = components['schemas']['ImportRowError'];
 export type ImportErrorResponse = components['schemas']['ImportErrorResponse'];
+export type RevokeRequest = components['schemas']['RevokeRequest'];
 
 const KEY = ['certificates'] as const;
 
@@ -63,5 +64,16 @@ export function useDownloadCertificatePdf() {
       });
       saveBlob(data, `${cert.cert_number}.pdf`);
     },
+  });
+}
+
+/** Revoke one of your own certificates. The record, its signature and its PDF
+ * are untouched; verification reports REVOKED from the status. */
+export function useRevokeCertificate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await api.post<Certificate>(`/certificates/${id}/revoke`, { reason })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   });
 }

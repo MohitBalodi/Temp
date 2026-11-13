@@ -173,6 +173,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{certificate_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Certificate
+         * @description Revoke one of your own certificates. Verification then reports REVOKED.
+         */
+        post: operations["revoke_certificate_api_v1_certificates__certificate_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{certificate_id}/pdf": {
         parameters: {
             query?: never;
@@ -663,6 +683,14 @@ export interface components {
              * @default 0
              */
             MANUAL_REVIEW: number;
+        };
+        /**
+         * RevokeRequest
+         * @description Revocation always carries a reason: the audit trail should say why.
+         */
+        RevokeRequest: {
+            /** Reason */
+            reason: string;
         };
         /**
          * Role
@@ -1184,6 +1212,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CertificateOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_certificate_api_v1_certificates__certificate_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateOut"];
+                };
+            };
+            /** @description Not this institution's certificate */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already revoked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

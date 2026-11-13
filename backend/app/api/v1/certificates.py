@@ -11,6 +11,7 @@ from app.schemas.certificates import (
     CertificateOut,
     ImportErrorResponse,
     ImportResult,
+    RevokeRequest,
 )
 from app.schemas.common import Page
 from app.services import certificates as service
@@ -55,6 +56,21 @@ def list_certificates(
 @router.get("/{certificate_id}", response_model=CertificateOut)
 def get_certificate(certificate_id: uuid.UUID, user: RegistryReader, db: DbSession) -> Certificate:
     return service.get_certificate(db, user, certificate_id)
+
+
+@router.post(
+    "/{certificate_id}/revoke",
+    response_model=CertificateOut,
+    responses={
+        404: {"description": "Not this institution's certificate"},
+        409: {"description": "Already revoked"},
+    },
+)
+def revoke_certificate(
+    certificate_id: uuid.UUID, body: RevokeRequest, user: InstitutionUser, db: DbSession
+) -> Certificate:
+    """Revoke one of your own certificates. Verification then reports REVOKED."""
+    return service.revoke_certificate(db, user, certificate_id, body.reason)
 
 
 @router.get(

@@ -1,9 +1,10 @@
-import { ChevronLeft, ChevronRight, Download, Search, Upload } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Download, Search, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { apiErrorMessage } from '@/api/client';
 import AddCertificateDialog from '@/components/AddCertificateDialog';
+import RevokeCertificateDialog from '@/components/RevokeCertificateDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useMe } from '@/hooks/useAuth';
+import type { Certificate } from '@/hooks/useCertificates';
 import { useCertificates, useDownloadCertificatePdf } from '@/hooks/useCertificates';
 import { useDebounced } from '@/hooks/useDebounced';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +33,7 @@ export default function Certificates() {
   const list = useCertificates({ q, page, size: PAGE_SIZE });
   const { toast } = useToast();
   const download = useDownloadCertificatePdf();
+  const [toRevoke, setToRevoke] = useState<Certificate | null>(null);
 
   const isInstitution = user?.role === 'institution';
   const isAdmin = user?.role === 'admin';
@@ -151,12 +154,25 @@ export default function Certificates() {
                   >
                     <Download />
                   </Button>
+                  {isInstitution && c.status === 'active' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setToRevoke(c)}
+                      aria-label={`Revoke ${c.cert_number}`}
+                      title="Revoke this certificate"
+                    >
+                      <Ban />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+
+      <RevokeCertificateDialog certificate={toRevoke} onClose={() => setToRevoke(null)} />
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>

@@ -4,6 +4,7 @@ import csv
 import io
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -372,6 +373,42 @@ def list_certificates(
         .limit(size)
     ).all()
     return list(items), total
+
+
+def revoke_certificate(
+    db: Session, user: User, certificate_id: uuid.UUID, reason: str
+) -> Certificate:
+    """Mark an own certificate revoked. The record, its signature and its PDF
+    stay exactly as issued — verification reports REVOKED from the status."""
+    institution = _institution_of(user)
+    cert = db.scalar(
+        select(Certificate).where(
+            Certificate.id == certificate_id, Certificate.institution_id == institution.id
+        )
+    )
+    if cert is None:
+        # Same answer as for another institution's certificate.
+        raise AppError(404, "not_found", "Certificate not found.")
+    if cert.status == CertificateStatus.REVOKED.value:
+        raise AppError(409, "already_revoked", "This certificate is already revoked.")
+
+    cert.status = CertificateStatus.REVOKED.value
+    cert.revoked_at = datetime.now(UTC)
+    audit.record(
+        db,
+        actor_id=user.id,
+        action="certificate.revoke",
+        entity="certificate",
+        entity_id=str(cert.id),
+        meta={
+            "cert_number": cert.cert_number,
+            "institution_code": institution.code,
+            "reason": reason,
+        },
+    )
+    db.commit()
+    db.refresh(cert)
+    return cert
 
 
 def get_certificate(db: Session, user: User, certificate_id: uuid.UUID) -> Certificate:
