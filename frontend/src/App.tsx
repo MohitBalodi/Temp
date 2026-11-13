@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { SESSION_EXPIRED_EVENT } from '@/api/client';
@@ -10,7 +10,10 @@ import Certificates from '@/pages/Certificates';
 import Dashboard from '@/pages/Dashboard';
 import ImportCertificates from '@/pages/ImportCertificates';
 import Login from '@/pages/Login';
-import Verify from '@/pages/Verify';
+
+// The QR scanner pulls in html5-qrcode, which only verifiers need: keep it out
+// of the main bundle.
+const Verify = lazy(() => import('@/pages/Verify'));
 
 export default function App() {
   const navigate = useNavigate();
@@ -39,7 +42,14 @@ export default function App() {
               <Route path="/certificates/import" element={<ImportCertificates />} />
             </Route>
             <Route element={<ProtectedRoute roles={['verifier', 'admin']} />}>
-              <Route path="/verify" element={<Verify />} />
+              <Route
+                path="/verify"
+                element={
+                  <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+                    <Verify />
+                  </Suspense>
+                }
+              />
             </Route>
           </Route>
         </Route>
