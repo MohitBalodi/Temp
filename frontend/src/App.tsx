@@ -10,6 +10,8 @@ import Certificates from '@/pages/Certificates';
 import Dashboard from '@/pages/Dashboard';
 import ImportCertificates from '@/pages/ImportCertificates';
 import Login from '@/pages/Login';
+import MyVerifications from '@/pages/MyVerifications';
+import VerificationDetail from '@/pages/VerificationDetail';
 
 // The QR scanner pulls in html5-qrcode, which only verifiers need: keep it out
 // of the main bundle.
@@ -50,6 +52,8 @@ export default function App() {
                   </Suspense>
                 }
               />
+              <Route path="/verifications" element={<MyVerifications />} />
+              <Route path="/verifications/:id" element={<VerificationDetail />} />
             </Route>
           </Route>
         </Route>

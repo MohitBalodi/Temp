@@ -288,3 +288,84 @@ def test_another_verifier_cannot_read_someone_elses_verification(
 
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "not_found"
+
+
+# --- history ------------------------------------------------------------------
+
+
+def test_history_lists_own_verifications_newest_first(
+    client: TestClient, auth_headers: Headers, db: Session
+) -> None:
+    cert = issue(client, auth_headers)
+    older = client.post(
+        VERIFY_ID_URL, json={"cert_number": cert["cert_number"]}, headers=auth_headers["verifier"]
+    ).json()
+    newer = client.post(
+        VERIFY_ID_URL, json={"cert_number": "TST9999"}, headers=auth_headers["verifier"]
+    ).json()
+
+    # Postgres now() is the transaction clock, so rows created inside one test
+    # transaction share a timestamp. Space them out to assert the real ordering.
+    for row_id, when in ((older["id"], 1), (newer["id"], 2)):
+        row = db.get(Verification, row_id)
+        assert row is not None
+        row.created_at = datetime(2026, 1, when, tzinfo=UTC)
+    db.flush()
+
+    r = client.get(VERIFICATIONS_URL, headers=auth_headers["verifier"])
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 2
+    assert [item["id"] for item in body["items"]] == [newer["id"], older["id"]]
+    assert [item["result"] for item in body["items"]] == ["MANUAL_REVIEW", "VERIFIED"]
+    # The number is there even when no record was found.
+    assert body["items"][0]["cert_number"] == "TST9999"
+    assert body["items"][1]["cert_number"] == cert["cert_number"]
+    assert "checks" not in body["items"][0]
+
+
+def test_history_is_scoped_to_the_verifier(client: TestClient, auth_headers: Headers) -> None:
+    client.post(VERIFY_ID_URL, json={"cert_number": "TST9999"}, headers=auth_headers["verifier"])
+    client.post(VERIFY_ID_URL, json={"cert_number": "TST8888"}, headers=auth_headers["admin"])
+
+    own = client.get(VERIFICATIONS_URL, headers=auth_headers["verifier"]).json()
+    all_of_them = client.get(VERIFICATIONS_URL, headers=auth_headers["admin"]).json()
+
+    assert own["total"] == 1
+    assert own["items"][0]["cert_number"] == "TST9999"
+    # An admin sees every verification, whoever ran it.
+    assert all_of_them["total"] == 2
+    assert client.get(VERIFICATIONS_URL, headers=auth_headers["institution"]).status_code == 403
+
+
+def test_history_paginates(client: TestClient, auth_headers: Headers) -> None:
+    for n in range(3):
+        client.post(
+            VERIFY_ID_URL, json={"cert_number": f"TST900{n}"}, headers=auth_headers["verifier"]
+        )
+
+    first = client.get(
+        VERIFICATIONS_URL, params={"page": 1, "size": 2}, headers=auth_headers["verifier"]
+    ).json()
+    second = client.get(
+        VERIFICATIONS_URL, params={"page": 2, "size": 2}, headers=auth_headers["verifier"]
+    ).json()
+
+    assert first["total"] == 3
+    assert len(first["items"]) == 2
+    assert len(second["items"]) == 1
+    assert {i["id"] for i in first["items"]}.isdisjoint({i["id"] for i in second["items"]})
+
+
+def test_result_names_the_verifier(
+    client: TestClient, auth_headers: Headers, users: dict[str, User]
+) -> None:
+    cert = issue(client, auth_headers)
+
+    body = client.post(
+        VERIFY_ID_URL, json={"cert_number": cert["cert_number"]}, headers=auth_headers["verifier"]
+    ).json()
+
+    assert body["verifier"]["email"] == users["verifier"].email
+    assert body["verifier"]["id"] == users["verifier"].id

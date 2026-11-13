@@ -1,28 +1,29 @@
 import { Search } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { apiErrorMessage } from '@/api/client';
 import QrScanner from '@/components/QrScanner';
-import VerificationResult from '@/components/VerificationResult';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Verification } from '@/hooks/useVerify';
 import { useVerifyById, useVerifyByQr } from '@/hooks/useVerify';
 
 export default function Verify() {
+  const navigate = useNavigate();
   const [certNumber, setCertNumber] = useState('');
-  const [result, setResult] = useState<Verification | null>(null);
 
   const byId = useVerifyById();
   const byQr = useVerifyByQr();
   const pending = byId.isPending || byQr.isPending;
   const error = byId.error ?? byQr.error;
 
+  // The result lives at its own URL, so it can be shared, reopened and printed.
+  const showResult = (verification: { id: string }) => navigate(`/verifications/${verification.id}`);
+
   const clear = () => {
-    setResult(null);
     byId.reset();
     byQr.reset();
   };
@@ -30,12 +31,12 @@ export default function Verify() {
   const verifyNumber = () => {
     if (!certNumber.trim()) return;
     byQr.reset();
-    byId.mutate(certNumber.trim(), { onSuccess: setResult });
+    byId.mutate(certNumber.trim(), { onSuccess: showResult });
   };
 
   const verifyPayload = (payload: string) => {
     byId.reset();
-    byQr.mutate(payload, { onSuccess: setResult });
+    byQr.mutate(payload, { onSuccess: showResult });
   };
 
   return (
@@ -91,19 +92,9 @@ export default function Verify() {
         </CardContent>
       </Card>
 
-      {result ? (
-        <VerificationResult verification={result} />
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base text-muted-foreground">No result yet</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            A result appears here with its evidence: registry lookup, revocation, and the
-            signatures on the record and the QR code.
-          </CardContent>
-        </Card>
-      )}
+      <p className="text-sm text-muted-foreground">
+        The result opens on its own page, with every check and a printable copy.
+      </p>
     </div>
   );
 }

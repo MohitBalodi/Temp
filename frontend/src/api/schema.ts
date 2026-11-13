@@ -187,6 +187,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Verifications
+         * @description Verification history, newest first: your own, or all of them for an admin.
+         */
+        get: operations["list_verifications_api_v1_verifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/verifications/{verification_id}": {
         parameters: {
             query?: never;
@@ -369,6 +389,17 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** Page[VerificationListItem] */
+        Page_VerificationListItem_: {
+            /** Items */
+            items: components["schemas"]["VerificationListItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -416,6 +447,28 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * VerificationListItem
+         * @description A row in a verifier's history — no checks, no record.
+         */
+        VerificationListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Method */
+            method: string;
+            /** Result */
+            result: string;
+            /** Cert Number */
+            cert_number: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** VerificationOut */
         VerificationOut: {
             /**
@@ -439,11 +492,22 @@ export interface components {
              * @description What the request itself carried (number, QR fields).
              */
             extracted_fields?: Record<string, never> | null;
+            verifier?: components["schemas"]["VerifierSummary"] | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * VerifierSummary
+         * @description Who ran the verification. Shown on the result page and nowhere else.
+         */
+        VerifierSummary: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
         };
         /** VerifyByIdRequest */
         VerifyByIdRequest: {
@@ -805,6 +869,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_verifications_api_v1_verifications_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_VerificationListItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

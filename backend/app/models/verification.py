@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.certificate import Certificate
+from app.models.user import User
 
 # The domain owns these; the table only constrains them. Re-exported so callers
 # can keep importing them from app.models.
@@ -50,3 +51,12 @@ class Verification(Base):
     )
 
     certificate: Mapped[Certificate | None] = relationship(lazy="joined")
+    verifier: Mapped[User] = relationship(lazy="joined")
+
+    @property
+    def cert_number(self) -> str | None:
+        """What this verification was about: the record's number when one was
+        found, otherwise the number that was looked up."""
+        if self.certificate is not None:
+            return self.certificate.cert_number
+        return (self.extracted_fields or {}).get("cert_number")

@@ -37,6 +37,27 @@ class CheckOut(BaseModel):
     detail: str
 
 
+class VerifierSummary(BaseModel):
+    """Who ran the verification. Shown on the result page and nowhere else."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+
+
+class VerificationListItem(BaseModel):
+    """A row in a verifier's history — no checks, no record."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    method: str
+    result: str
+    cert_number: str | None
+    created_at: datetime
+
+
 class VerificationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,4 +71,5 @@ class VerificationOut(BaseModel):
     extracted_fields: dict[str, Any] | None = Field(
         default=None, description="What the request itself carried (number, QR fields)."
     )
+    verifier: VerifierSummary | None = None
     created_at: datetime

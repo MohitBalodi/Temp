@@ -1,11 +1,17 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import DbSession, require_role
 from app.models import Role, User, Verification
-from app.schemas.verify import VerificationOut, VerifyByIdRequest, VerifyByQrRequest
+from app.schemas.common import Page
+from app.schemas.verify import (
+    VerificationListItem,
+    VerificationOut,
+    VerifyByIdRequest,
+    VerifyByQrRequest,
+)
 from app.services import verifications as service
 
 router = APIRouter(prefix="/verify", tags=["verify"])
@@ -30,6 +36,23 @@ def verify_by_qr(body: VerifyByQrRequest, user: Verifier, db: DbSession) -> Veri
     """Verify a scanned QR payload: the signature it carries is re-checked
     against the registry record and the institution's public key."""
     return service.verify_by_payload(db, user, body.payload)
+
+
+@verifications_router.get("", response_model=Page[VerificationListItem])
+def list_verifications(
+    user: Verifier,
+    db: DbSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> Page[VerificationListItem]:
+    """Verification history, newest first: your own, or all of them for an admin."""
+    items, total = service.list_verifications(db, user, page=page, size=size)
+    return Page[VerificationListItem](
+        items=[VerificationListItem.model_validate(v) for v in items],
+        total=total,
+        page=page,
+        size=size,
+    )
 
 
 @verifications_router.get("/{verification_id}", response_model=VerificationOut)

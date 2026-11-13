@@ -58,3 +58,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print: the verification result should read as a one-page record on paper.
+   Chrome is hidden with Tailwind's print: variants; this sets the page itself. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Keep a check and its explanation together across a page break. */
+  .print-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}

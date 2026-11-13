@@ -6,7 +6,7 @@ module only does the I/O around it (lookup, persistence, audit).
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -112,6 +112,25 @@ def verify_by_payload(db: Session, user: User, payload: str) -> Verification:
             422, "qr_payload_invalid", f"This is not a certificate QR code: {exc}"
         ) from exc
     return _run(db, user, method=VerificationMethod.QR, cert_number=qr.cert_number, qr=qr)
+
+
+def list_verifications(
+    db: Session, user: User, *, page: int, size: int
+) -> tuple[list[Verification], int]:
+    """A verifier's own history, newest first; an admin sees every verification."""
+    stmt = select(Verification)
+    if user.role != Role.ADMIN:
+        stmt = stmt.where(Verification.verifier_id == user.id)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    items = db.scalars(
+        # `id` only breaks ties, so pagination stays stable when two rows share
+        # a timestamp (now() is per transaction, not per statement).
+        stmt.order_by(Verification.created_at.desc(), Verification.id)
+        .offset((page - 1) * size)
+        .limit(size)
+    ).all()
+    return list(items), total
 
 
 def get_verification(db: Session, user: User, verification_id: uuid.UUID) -> Verification:

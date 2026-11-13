@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/certificates', label: 'Certificates', roles: ['institution', 'admin'] },
   { to: '/certificates/import', label: 'Import CSV', roles: ['institution'] },
   { to: '/verify', label: 'Verify', roles: ['verifier', 'admin'] },
+  { to: '/verifications', label: 'History', roles: ['verifier', 'admin'] },
 ];
 
 /** Page chrome for logged-in pages. Rendered inside ProtectedRoute. */
@@ -39,7 +40,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-muted/40">
-      <header className="border-b bg-background">
+      <header className="border-b bg-background print:hidden">
         <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
           <span className="font-semibold">Authenticity Validator</span>
           <nav className="flex flex-1 gap-1 overflow-x-auto">
