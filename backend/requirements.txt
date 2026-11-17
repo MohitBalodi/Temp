@@ -34,10 +34,13 @@ pytest==8.3.4
 httpx==0.28.1
 ruff==0.8.4
 
-# Tier 2 (OCR) — uncomment when the upload pipeline starts. These are large;
-# keep them out of the image until they are actually used.
-# paddleocr==3.0.0
-# paddlepaddle==3.0.0
-# pytesseract==0.3.13
-# opencv-python-headless==4.10.0.84
-# PyYAML==6.0.2
+# Tier 2 (OCR). Tesseract only — see the OCR engine decision in CLAUDE.md.
+# PaddleOCR is deliberately absent: it cannot install on Python 3.12 at the
+# pinned 3.0.0 (paddlex 3.0.0 caps pandas<=1.5.3, which has no cp312 wheel),
+# and the versions that do install drag in 55+ packages plus
+# opencv-contrib-python. TesseractEngine sits behind the OcrEngine interface
+# in app/services/ocr/engines.py, so a PaddleEngine can be added later
+# without touching the pipeline.
+pytesseract==0.3.13
+opencv-python-headless==4.10.0.84
+PyYAML==6.0.2
