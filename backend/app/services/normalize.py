@@ -3,8 +3,11 @@
 Used both when storing/signing registry records and (later) when comparing
 OCR-extracted fields, so equivalent inputs always produce identical values.
 
-OCR confusion fixes (O↔0, I/l↔1, S↔5, B↔8) are deliberately NOT here: they
-only apply to OCR output in ID fields and land with field matching (Tier 2).
+OCR confusions (O↔0, I/l↔1, S↔5, B↔8) are handled by `collapse_confusables`,
+which is for *comparing* IDs, not for storing them. It is applied to both
+sides of a comparison, never used to rewrite a value: the pairs are ambiguous
+in both directions, so rewriting one side would corrupt a correct reading
+("NBIT" would become "N81T") while collapsing both makes the two agree.
 """
 
 import re
@@ -30,6 +33,27 @@ def normalize_text(value: str) -> str:
 def normalize_id(value: str) -> str:
     """Uppercase and strip everything except A–Z/0–9. For cert/roll numbers and codes."""
     return _NON_ALNUM.sub("", normalize_text(value))
+
+
+# Characters OCR confuses in identifiers, each mapped to one representative.
+# Applied to both sides of a comparison — see the module docstring.
+_CONFUSABLES = str.maketrans({"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "S": "5", "B": "8"})
+
+
+def collapse_confusables(value: str) -> str:
+    """Collapse OCR-confusable characters in an identifier to one form.
+
+    For comparison only. `collapse_confusables("NBIT2024CS0001")` and
+    `collapse_confusables("N81T2024C50001")` are equal, so a recogniser that
+    read B as 8 and S as 5 still matches the registry — without either stored
+    value being altered.
+    """
+    return normalize_id(value).translate(_CONFUSABLES)
+
+
+def ids_match(left: str, right: str) -> bool:
+    """Whether two identifiers are the same, tolerating OCR confusables."""
+    return collapse_confusables(left) == collapse_confusables(right)
 
 
 def normalize_decimal(value: Decimal | float | int | str | None) -> Decimal | None:

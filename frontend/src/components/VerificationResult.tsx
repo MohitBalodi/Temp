@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleHelp, MinusCircle, Printer, XCircle } from 'lucide-react';
 
+import ExtractedFieldsTable from '@/components/ExtractedFieldsTable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Verification, VerificationCheck } from '@/hooks/useVerify';
@@ -57,6 +58,25 @@ const CHECK_LABELS: Record<string, string> = {
   field_match: 'Field match',
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  cert_number: 'certificate number',
+  roll_number: 'roll number',
+  student_name: 'student',
+  programme: 'programme',
+  year_of_passing: 'year of passing',
+  cgpa: 'CGPA',
+  marks: 'marks',
+};
+
+/** The engine emits one check per field as `field_match.<field>`. */
+function checkLabel(name: string): string {
+  if (name.startsWith('field_match.')) {
+    const field = name.slice('field_match.'.length);
+    return `Field match — ${FIELD_LABELS[field] ?? field}`;
+  }
+  return CHECK_LABELS[name] ?? name;
+}
+
 const METHOD_LABELS: Record<string, string> = {
   id: 'Certificate number',
   qr: 'QR code',
@@ -71,7 +91,7 @@ function CheckRow({ check }: { check: VerificationCheck }) {
       <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', className)} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
-          {CHECK_LABELS[check.name] ?? check.name}
+          {checkLabel(check.name)}
           <span className="sr-only"> — {label}</span>
         </p>
         <p className="text-sm text-muted-foreground">{check.detail}</p>
@@ -165,6 +185,8 @@ export default function VerificationResult({ verification, full = false }: Props
           )}
         </CardContent>
       </Card>
+
+      <ExtractedFieldsTable verification={verification} />
 
       <Card>
         <CardHeader className="pb-1">

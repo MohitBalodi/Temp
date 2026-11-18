@@ -22,7 +22,7 @@ from app.services.verification.engine import (
 )
 
 
-def _registry_record(cert: Certificate) -> RegistryRecord:
+def registry_record(cert: Certificate) -> RegistryRecord:
     """Map the stored row onto the facts the engine checks."""
     return RegistryRecord(
         record=CertificateRecord(
@@ -40,6 +40,7 @@ def _registry_record(cert: Certificate) -> RegistryRecord:
         public_key_pem=cert.institution.public_key,
         status=cert.status,
         revoked_at=cert.revoked_at,
+        file_sha256=cert.file_sha256,
     )
 
 
@@ -61,7 +62,7 @@ def _run(
         VerificationInput(
             method=method,
             cert_number=cert_number,
-            record=_registry_record(cert) if cert else None,
+            record=registry_record(cert) if cert else None,
             qr=qr,
         )
     )

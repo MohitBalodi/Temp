@@ -256,6 +256,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/verify/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify By Upload
+         * @description Upload a certificate for OCR verification.
+         *
+         *     Returns at once with a job to poll: extraction runs in the worker. The
+         *     file's type is decided by its leading bytes, not by its name or the
+         *     Content-Type the client sent.
+         */
+        post: operations["verify_by_upload_api_v1_verify_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/verify/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job
+         * @description Poll an upload job. `done` carries the verification id to fetch.
+         */
+        get: operations["get_job_api_v1_verify_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/verifications": {
         parameters: {
             query?: never;
@@ -380,6 +424,15 @@ export interface components {
             /**
              * File
              * Format: binary
+             */
+            file: string;
+        };
+        /** Body_verify_by_upload_api_v1_verify_upload_post */
+        Body_verify_by_upload_api_v1_verify_upload_post: {
+            /**
+             * File
+             * Format: binary
+             * @description A PDF, PNG or JPEG certificate, max 10 MB.
              */
             file: string;
         };
@@ -582,6 +635,24 @@ export interface components {
             /** Is Active */
             is_active?: boolean | null;
         };
+        /** JobStatusOut */
+        JobStatusOut: {
+            /**
+             * Status
+             * @description queued | running | done | failed
+             */
+            status: string;
+            /**
+             * Verification Id
+             * @description Set once status is done; fetch GET /verifications/{id}.
+             */
+            verification_id?: string | null;
+            /**
+             * Error
+             * @description Why the job failed, when it did. Never a verdict.
+             */
+            error?: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -713,6 +784,22 @@ export interface components {
              * @description Access token lifetime in seconds.
              */
             access_expires_in: number;
+        };
+        /**
+         * UploadAccepted
+         * @description What `POST /verify/upload` returns: the job to poll, not a result.
+         */
+        UploadAccepted: {
+            /**
+             * Job Id
+             * @description Poll GET /verify/jobs/{job_id} for the outcome.
+             */
+            job_id: string;
+            /**
+             * Upload Id
+             * Format: uuid
+             */
+            upload_id: string;
         };
         /** UserOut */
         UserOut: {
@@ -1372,6 +1459,84 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    verify_by_upload_api_v1_verify_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_verify_by_upload_api_v1_verify_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadAccepted"];
+                };
+            };
+            /** @description The file is over the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file's own bytes are not PDF, PNG or JPEG */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_verify_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

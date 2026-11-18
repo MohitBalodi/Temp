@@ -29,6 +29,23 @@ class VerifyByQrRequest(BaseModel):
     )
 
 
+class UploadAccepted(BaseModel):
+    """What `POST /verify/upload` returns: the job to poll, not a result."""
+
+    job_id: str = Field(description="Poll GET /verify/jobs/{job_id} for the outcome.")
+    upload_id: uuid.UUID
+
+
+class JobStatusOut(BaseModel):
+    status: str = Field(description="queued | running | done | failed")
+    verification_id: uuid.UUID | None = Field(
+        default=None, description="Set once status is done; fetch GET /verifications/{id}."
+    )
+    error: str | None = Field(
+        default=None, description="Why the job failed, when it did. Never a verdict."
+    )
+
+
 class CheckOut(BaseModel):
     """One piece of evidence. `status` is pass | fail | skipped | uncertain."""
 

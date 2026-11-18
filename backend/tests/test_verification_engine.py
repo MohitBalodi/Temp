@@ -9,6 +9,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.services.qr import QrPayload
 from app.services.signing import CertificateRecord, public_key_pem, sign_record
 from app.services.verification.engine import (
+    CHECK_FIELD_MATCH,
+    CHECK_FILE_HASH,
     CHECK_QR_SIGNATURE,
     CHECK_RECORD_SIGNATURE,
     CHECK_REGISTRY_LOOKUP,
@@ -23,6 +25,10 @@ from app.services.verification.engine import (
 
 CERT_NUMBER = "TST2024CS0001"
 OTHER_NUMBER = "TST2024CS0002"
+
+# Stand-ins for real digests; only equality matters to the engine.
+ISSUED_SHA = "a" * 64
+OTHER_SHA = "b" * 64
 
 
 def record(cert_number: str = CERT_NUMBER, institution_code: str = "TST") -> CertificateRecord:
@@ -52,6 +58,7 @@ def registry(
     status: str = "active",
     revoked_at: datetime | None = None,
     signed: CertificateRecord | None = None,
+    file_sha256: str | None = ISSUED_SHA,
 ) -> RegistryRecord:
     """A stored record. `signed` lets a test sign *different* content than the
     record holds, which is what an altered row looks like."""
@@ -62,6 +69,7 @@ def registry(
         public_key_pem=public_key_pem(key),
         status=status,
         revoked_at=revoked_at,
+        file_sha256=file_sha256,
     )
 
 
@@ -210,11 +218,15 @@ def test_revocation_wins_over_a_bad_qr_signature(key: Ed25519PrivateKey) -> None
 def test_checks_are_stable_and_serializable(key: Ed25519PrivateKey) -> None:
     outcome = evaluate(VerificationInput(VerificationMethod.ID, CERT_NUMBER, registry(key)))
 
+    # The upload-only checks are present and skipped on the by-number path, so
+    # the result page always lists the same evidence in the same order.
     assert [c.name for c in outcome.checks] == [
         CHECK_REGISTRY_LOOKUP,
         CHECK_REVOCATION,
         CHECK_RECORD_SIGNATURE,
         CHECK_QR_SIGNATURE,
+        CHECK_FILE_HASH,
+        CHECK_FIELD_MATCH,
     ]
     for item in outcome.checks_as_dicts():
         assert set(item) == {"name", "status", "detail"}
