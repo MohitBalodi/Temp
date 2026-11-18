@@ -317,7 +317,8 @@ def _compare_field(
         return Check(
             check_name,
             CheckStatus.UNCERTAIN,
-            f"{label} could not be read from the document.",
+            f"{label} could not be read from the document, so it was not checked against "
+            f"the registry's {expected}.",
         )
 
     agrees = ids_match(found, expected) if name in _ID_FIELDS else found == expected
@@ -376,7 +377,8 @@ def _field_match(data: VerificationInput) -> list[Check]:
                 Check(
                     f"{CHECK_FIELD_MATCH}.{name}",
                     CheckStatus.UNCERTAIN,
-                    f"{_label(name)} was not found on the document.",
+                    f"{_label(name)} was not found on the document, so it was not checked "
+                    f"against the registry's {expected}.",
                 )
             )
             continue
@@ -421,12 +423,16 @@ def _decide(data: VerificationInput, checks: list[Check]) -> VerificationResult:
         # Rule 3: the verifier holds the exact file the institution issued.
         return VerificationResult.VERIFIED
     if status[CHECK_QR_SIGNATURE] is CheckStatus.PASS and not conflicting:
-        # Rule 4. "All extracted critical fields match" is read as "nothing
-        # conflicts": a valid Ed25519 signature over the record is
-        # cryptographic proof, and a field OCR could not read confidently must
-        # not be allowed to weaken it. A genuine *conflict* still falls through
-        # to rule 5, which is what catches an altered document carrying its
-        # original QR.
+        # Rule 4, and the rule the whole QR-first upload path rests on: a valid
+        # signature plus nothing that confidently contradicts the registry is
+        # VERIFIED. "All extracted critical fields match" is read as "nothing
+        # conflicts", because a valid Ed25519 signature over the record is
+        # cryptographic proof and a field the OCR could not read confidently
+        # must not be allowed to weaken it — those fields are reported as not
+        # checked, beside the registry's own values. A genuine *conflict*
+        # falls through to rule 5, which is what catches an altered document
+        # still carrying its original QR; an invalid signature never gets here
+        # at all, because rule 2 above has already made it a MISMATCH.
         return VerificationResult.VERIFIED
     if conflicting:
         # Rule 5: a critical field disagrees, read confidently enough to mean it.

@@ -1,0 +1,2 @@
+certificate1: Nandini Rao, CGPA 8.56/10.00, NBIT2022CS0020, 18CS020, 2022-07-20, Year of passing 2022, B.Tech Computer Science and Engineering, Northbridge Institute of Technology(fictional)
+certificate2: Yash Thakur,Marks69.75%, NBIT2022BC0019, 18BC019, 2022-07-20, Year of passing 2022, BCA, Northbridge Institute of Technology(fictional)

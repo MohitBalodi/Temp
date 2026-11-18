@@ -106,6 +106,10 @@ def _extracted_summary(
         summary["qr_present"] = True
         summary["cert_number"] = qr.cert_number
         summary["institution_code"] = qr.institution_code
+        # How hard the code was to read: which of the two readers got it, and
+        # at what upscale. A 3x hit means the photo was marginal.
+        summary["qr_reader"] = page.qr_reader
+        summary["qr_scale"] = page.qr_scale
     else:
         summary["qr_present"] = False
         if number := extraction.value("cert_number"):

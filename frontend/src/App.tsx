@@ -15,8 +15,9 @@ import Login from '@/pages/Login';
 import MyVerifications from '@/pages/MyVerifications';
 import VerificationDetail from '@/pages/VerificationDetail';
 
-// The QR scanner pulls in html5-qrcode, which only verifiers need: keep it out
-// of the main bundle.
+// Lazy-loaded since the live QR scanner lived here; the page is small now
+// that it does not, but splitting a route only verifiers reach still costs
+// nothing and keeps the main bundle to what every role needs.
 const Verify = lazy(() => import('@/pages/Verify'));
 
 export default function App() {

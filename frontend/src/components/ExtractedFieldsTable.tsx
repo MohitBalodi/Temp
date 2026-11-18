@@ -24,6 +24,21 @@ const FIELD_LABELS: Record<string, string> = {
   institution_code: 'Institution code',
 };
 
+/**
+ * The fields a verdict may turn on. One of these that the reader missed still
+ * gets a row — with the registry's value and "not checked" — because a silent
+ * omission reads as if the field had agreed.
+ */
+const CRITICAL_FIELDS = [
+  'cert_number',
+  'student_name',
+  'roll_number',
+  'programme',
+  'year_of_passing',
+  'cgpa',
+  'marks',
+];
+
 /** Order shown to the verifier: the critical fields first, in spec order. */
 const FIELD_ORDER = [
   'cert_number',
@@ -118,7 +133,12 @@ export default function ExtractedFieldsTable({ verification }: { verification: V
     | null
     | undefined;
   const fields = fieldsOf(verification);
-  const names = FIELD_ORDER.filter((n) => n in fields);
+  const names = FIELD_ORDER.filter(
+    (n) =>
+      n in fields ||
+      // A critical field the registry holds and the reader did not find.
+      (CRITICAL_FIELDS.includes(n) && registryValue(verification, n) !== null),
+  );
 
   if (verification.method !== 'upload') return null;
 
@@ -163,12 +183,16 @@ export default function ExtractedFieldsTable({ verification }: { verification: V
                     <tr key={name} className="print-keep align-top">
                       <td className="py-2 pr-4 font-medium">{FIELD_LABELS[name] ?? name}</td>
                       <td className="py-2 pr-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {/* `raw` keeps the document's own casing; `value` is
-                              the normalized form that was compared. */}
-                          <span className="font-mono">{field.raw || field.value || '—'}</span>
-                          {source === 'ocr' && <ConfidenceBadge confidence={field.confidence} />}
-                        </div>
+                        {field ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* `raw` keeps the document's own casing; `value`
+                                is the normalized form that was compared. */}
+                            <span className="font-mono">{field.raw || field.value || '—'}</span>
+                            {source === 'ocr' && <ConfidenceBadge confidence={field.confidence} />}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">could not be read</span>
+                        )}
                       </td>
                       <td className="py-2 pr-4 font-mono text-muted-foreground">
                         {expected ?? '—'}
@@ -180,7 +204,7 @@ export default function ExtractedFieldsTable({ verification }: { verification: V
                             <span className="text-xs">{style.label}</span>
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">not compared</span>
+                          <span className="text-xs text-muted-foreground">not checked</span>
                         )}
                       </td>
                     </tr>

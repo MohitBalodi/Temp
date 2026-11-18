@@ -17,6 +17,14 @@ export function useVerifyById() {
   });
 }
 
+/**
+ * Verify a bare QR payload.
+ *
+ * No UI calls this since "Scan QR" and "Upload document" merged into one
+ * "Verify document" tab: a photographed code is now decoded server-side from
+ * the uploaded image. Kept because `POST /verify/qr` is still a supported
+ * endpoint, and a payload from anywhere else would come through here.
+ */
 export function useVerifyByQr() {
   return useMutation({
     mutationFn: async (payload: string) =>

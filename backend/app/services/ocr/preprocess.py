@@ -257,8 +257,10 @@ def decode_image(data: bytes) -> np.ndarray | None:
 def prepare(image: np.ndarray, *, binarise: bool = True) -> np.ndarray:
     """The full pipeline, in the order the module docstring describes.
 
-    `binarise=False` stops before thresholding, which is what the QR decoder
-    wants: pyzbar reads a grayscale gradient better than a hard-clipped one.
+    `binarise=False` stops before thresholding, which is useful for looking at
+    what the cleanup did without a hard clip on top. The QR decoder no longer
+    uses it: codes are read from the original image, before any of this (see
+    `ocr/qr_scan.py`).
     """
     flattened, _ = correct_perspective(image)
     gray = to_grayscale(flattened)

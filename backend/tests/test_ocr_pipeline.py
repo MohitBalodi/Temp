@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 import pytest
 
-from app.services.ocr import extract, extract_fields
+from app.services.ocr import extract, extract_fields, qr_scan
 from app.services.ocr import preprocess as pp
 from app.services.ocr.engines import OcrLine, TesseractEngine, _lines_from_tsv, get_engine
 from app.services.ocr.extract_text import (
@@ -476,6 +476,53 @@ def test_decode_qr_survives_rotation(sample) -> None:
 
 def test_decode_qr_finds_nothing_in_noise() -> None:
     assert decode_qr(to_array(noise_image())) == []
+
+
+def test_decode_qr_records_which_reader_and_scale_read_it(sample) -> None:
+    """Evidence, not decoration: a code that only came out at 3x says the
+    photograph was marginal, which is worth keeping."""
+    symbols = decode_qr(to_array(render_png(sample.pdf)))
+    assert symbols
+    assert symbols[0].reader in (qr_scan.READER_ZXING, qr_scan.READER_PYZBAR)
+    assert symbols[0].scale in qr_scan.SCALES
+
+
+def test_the_ladder_stops_at_the_first_certificate_payload(sample) -> None:
+    """A page may carry other codes. The ladder keeps climbing until it finds
+    an AVA1 payload rather than settling for the first barcode it sees."""
+    image = to_array(render_png(sample.pdf))
+    symbols = qr_scan.scan(image)
+    assert any(s.is_certificate_payload for s in symbols)
+
+
+def test_a_rect_found_on_an_upscaled_copy_comes_back_in_original_coordinates() -> None:
+    """The rect is used to mask the QR out of the caller's own image, so a hit
+    at 2x must not report 2x coordinates."""
+    assert qr_scan._shrink((100, 200, 40, 40), 2) == (50, 100, 20, 20)
+    assert qr_scan._shrink((100, 200, 40, 40), 1) == (100, 200, 40, 40)
+
+
+def test_an_upscale_that_would_be_enormous_is_skipped() -> None:
+    """A 12 MP photo at 3x is 108 MP: seconds and hundreds of megabytes to
+    learn nothing about a code that is already readable at 1x."""
+    big = np.zeros((4000, 3000, 3), dtype=np.uint8)
+    assert qr_scan._upscaled(big, 3) is None
+    assert qr_scan._upscaled(big, 1) is big
+
+
+def test_a_non_certificate_code_is_not_a_certificate_payload() -> None:
+    assert not qr_scan.is_certificate_payload("https://example.test/anything")
+    assert not qr_scan.is_certificate_payload("")
+
+
+def test_the_qr_is_read_from_the_original_photo_not_a_prepared_copy(sample) -> None:
+    """The whole point of the ordering: a photo whose text OCR struggles with
+    still gives up its signature, because the code is read before any
+    threshold is chosen."""
+    photo = to_array(photo_of_certificate(render_png(sample.pdf)))
+    payloads = decode_qr_payloads(photo)
+    assert payloads
+    assert parse_payload(payloads[0]).cert_number == sample.truth["cert_number"]
 
 
 # --- the entry point ----------------------------------------------------------

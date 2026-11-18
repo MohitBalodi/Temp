@@ -44,3 +44,12 @@ ruff==0.8.4
 pytesseract==0.3.13
 opencv-python-headless==4.10.0.84
 PyYAML==6.0.2
+
+# QR decoding. zxing-cpp reads the QR on a phone photo that pyzbar cannot:
+# measured on samples/photos, zxing read 11 of 12 at the photo's own
+# resolution and 12 of 12 with one 2x upscale, while pyzbar read 2 of 12 at
+# 1x and never read sample3. It resolves to exactly one package with no
+# dependencies (a 0.96 MB prebuilt cp312 manylinux wheel, measured with
+# pip install --dry-run --report), so pyzbar stays as the fallback reader
+# rather than being replaced.
+zxing-cpp==2.3.0

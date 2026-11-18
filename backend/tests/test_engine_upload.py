@@ -17,6 +17,7 @@ from app.services.signing import CertificateRecord, public_key_pem, sign_record
 from app.services.verification.engine import (
     CHECK_FIELD_MATCH,
     CHECK_FILE_HASH,
+    CHECK_QR_SIGNATURE,
     CHECK_REGISTRY_LOOKUP,
     Check,
     CheckStatus,
@@ -282,6 +283,86 @@ def test_rule_4_does_not_rescue_a_confident_conflict(key: Ed25519PrivateKey) -> 
         )
     )
     assert outcome.result is VerificationResult.MISMATCH
+
+
+# --- the QR-first rule --------------------------------------------------------
+#
+# The rule the merged "Verify document" path rests on: a valid signature plus
+# nothing that confidently contradicts the registry is VERIFIED, whatever the
+# OCR managed to read. These pin all four of its corners.
+
+
+def qr_input(key: Ed25519PrivateKey, evidence: UploadEvidence, **kwargs) -> VerificationInput:
+    """An upload carrying a genuine QR for `record()`."""
+    kwargs.setdefault("qr", QrPayload(CERT_NUMBER, "TST", sign_record(key, record())))
+    return upload_input(key, evidence, **kwargs)
+
+
+def test_a_valid_qr_verifies_when_a_field_could_not_be_read(key: Ed25519PrivateKey) -> None:
+    """A photograph that lost the CGPA to a shadow is still VERIFIED: the
+    signature is proof, and an unread field is not a disagreement."""
+    outcome = evaluate(qr_input(key, upload(cgpa=None)))
+    assert outcome.result is VerificationResult.VERIFIED
+    check = statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.cgpa"]
+    assert check is CheckStatus.UNCERTAIN
+
+
+def test_an_unread_field_is_reported_against_the_registry_value(key: Ed25519PrivateKey) -> None:
+    """ "Not checked" has to say what it was not checked against, or the
+    verifier is left to guess what the document should have said."""
+    outcome = evaluate(qr_input(key, upload(cgpa=None)))
+    detail = next(c.detail for c in outcome.checks if c.name == f"{CHECK_FIELD_MATCH}.cgpa")
+    assert "8.50" in detail
+    assert "not checked" in detail
+
+
+def test_a_valid_qr_verifies_when_nothing_at_all_was_read(key: Ed25519PrivateKey) -> None:
+    """An unrecognised layout compares no fields. With a valid signature that
+    is still VERIFIED — the registry values stand on the signature, not on the
+    OCR — and the evidence says why nothing was compared."""
+    evidence = UploadEvidence(sha256=OTHER_SHA, template=None, fields={}, has_text=False)
+    outcome = evaluate(qr_input(key, evidence))
+    assert outcome.result is VerificationResult.VERIFIED
+    assert statuses(outcome.checks)[CHECK_FIELD_MATCH] is CheckStatus.UNCERTAIN
+
+
+def test_a_confident_conflict_beats_a_valid_qr(key: Ed25519PrivateKey) -> None:
+    """The point of reading the print at all: an edited document keeps its
+    original QR, so the signature cannot be the last word."""
+    outcome = evaluate(qr_input(key, upload(student_name="SOMEONE ELSE", confidence=0.99)))
+    assert outcome.result is VerificationResult.MISMATCH
+
+
+def test_an_invalid_qr_signature_is_a_mismatch_however_well_it_reads(
+    key: Ed25519PrivateKey,
+) -> None:
+    """Rule 2 runs before the fields are even considered: a payload signed by
+    something other than this institution's key is a MISMATCH even when every
+    printed field agrees."""
+    other = Ed25519PrivateKey.generate()
+    outcome = evaluate(
+        upload_input(
+            key,
+            upload(),
+            qr=QrPayload(CERT_NUMBER, "TST", sign_record(other, record())),
+        )
+    )
+    assert outcome.result is VerificationResult.MISMATCH
+    assert statuses(outcome.checks)[CHECK_QR_SIGNATURE] is CheckStatus.FAIL
+
+
+def test_a_low_confidence_conflict_does_not_overturn_a_valid_qr(key: Ed25519PrivateKey) -> None:
+    """Only a *confident* reading may contradict a signature; below the
+    threshold the field is reported as uncertain and the QR carries it."""
+    outcome = evaluate(
+        qr_input(
+            key,
+            upload(student_name="SOMEONE ELSE", confidence=0.40),
+            thresholds=Thresholds(min_field_confidence=0.85),
+        )
+    )
+    assert outcome.result is VerificationResult.VERIFIED
+    assert statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.student_name"] is CheckStatus.UNCERTAIN
 
 
 # --- identifier comparison ----------------------------------------------------

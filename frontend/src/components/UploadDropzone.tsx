@@ -1,4 +1,4 @@
-import { FileCheck2, FileUp, Loader2 } from 'lucide-react';
+import { Camera, FileCheck2, FileUp, Loader2 } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export default function UploadDropzone({
 }: Props) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [complaint, setComplaint] = useState<string | null>(null);
 
@@ -60,6 +61,10 @@ export default function UploadDropzone({
   };
 
   const pick = () => inputRef.current?.click();
+  // A separate input, because `capture` must not be set on the file picker:
+  // on a phone it would hide the gallery and the files, and on a desktop
+  // browser it is ignored anyway.
+  const photograph = () => cameraRef.current?.click();
 
   return (
     <div className="space-y-3">
@@ -97,6 +102,19 @@ export default function UploadDropzone({
           }}
         />
 
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          disabled={disabled || busy}
+          onChange={(e) => {
+            accept(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+
         {busy ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
@@ -126,9 +144,13 @@ export default function UploadDropzone({
                 choose a file
               </Button>
             </p>
+            <Button type="button" variant="outline" size="sm" onClick={photograph} disabled={disabled}>
+              <Camera />
+              Take a photo
+            </Button>
             <p className="text-xs text-muted-foreground">
               PDF, PNG or JPEG, up to {describeSize(UPLOAD_MAX_BYTES)}. A PDF with a text layer is
-              read directly; a scan or photo goes through OCR.
+              read directly; a photo or scan has its QR code read first, then its printed text.
             </p>
           </div>
         )}
