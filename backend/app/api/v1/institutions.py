@@ -2,12 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.core.deps import DbSession, require_role
+from app.core.deps import CurrentUser, DbSession, require_role
 from app.models import Institution, Role, User
 from app.schemas.common import Page
 from app.schemas.institutions import (
     InstitutionCreate,
     InstitutionCreated,
+    InstitutionOption,
     InstitutionOut,
     InstitutionUpdate,
 )
@@ -44,6 +45,18 @@ def list_institutions(
     return Page[InstitutionOut](
         items=[InstitutionOut.model_validate(i) for i in items], total=total, page=page, size=size
     )
+
+
+@router.get("/options", response_model=list[InstitutionOption])
+def institution_options(_: CurrentUser, db: DbSession) -> list[InstitutionOption]:
+    """Active institutions as form choices, for any signed-in user.
+
+    A verifier needs this to address a verification request when the document
+    identified no institution. It exposes a name and a code — which are on
+    every issued certificate anyway — and not the registry behind them.
+    Declared before `/{institution_id}` so "options" is not read as an id.
+    """
+    return [InstitutionOption.model_validate(i) for i in service.list_active(db)]
 
 
 @router.get("/{institution_id}", response_model=InstitutionOut)

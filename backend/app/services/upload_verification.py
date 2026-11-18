@@ -152,6 +152,10 @@ def verify_upload(db: Session, upload: Upload, verifier: User) -> Verification:
         verifier_id=verifier.id,
         method=VerificationMethod.UPLOAD.value,
         certificate_id=cert.id if cert else None,
+        # Keeps the document reachable from its result: a verification request
+        # shows the institution this very file, and retention leaves it alone
+        # while that request is open.
+        upload_id=upload.id,
         result=outcome.result.value,
         checks=outcome.checks_as_dicts(),
         extracted_fields=_extracted_summary(upload, page, extraction, qr),

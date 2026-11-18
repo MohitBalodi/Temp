@@ -9,6 +9,10 @@ reach by construction even though they sit under the same volume.
 
 Orphan files — written just before a crash, so never committed — are reported
 and, unless --dry-run, removed too: nothing in the database refers to them.
+
+An upload an open verification request is about is held back whatever its
+expiry says, and reported as held. Normal retention resumes when the case
+closes.
 """
 
 from __future__ import annotations
@@ -57,13 +61,19 @@ def main() -> int:
     now = datetime.now(UTC)
     db = SessionLocal()
     try:
-        due = list(db.scalars(select(Upload).where(Upload.expires_at <= now)))
+        expired = list(db.scalars(select(Upload).where(Upload.expires_at <= now)))
+        held = uploads.held_upload_ids(db)
+        due = [row for row in expired if row.id not in held]
+        kept = [row for row in expired if row.id in held]
         all_paths = {p for p in db.scalars(select(Upload.path))}
         orphans = _orphan_files(all_paths, now)
 
         if args.dry_run:
             logger.info("Would delete %d expired upload(s):", len(due))
             for row in due:
+                logger.info("  %s  expired %s  %s", row.id, row.expires_at.isoformat(), row.path)
+            logger.info("Would hold %d expired upload(s) for an open request:", len(kept))
+            for row in kept:
                 logger.info("  %s  expired %s  %s", row.id, row.expires_at.isoformat(), row.path)
             logger.info("Would delete %d orphan file(s):", len(orphans))
             for path in orphans:
@@ -82,10 +92,12 @@ def main() -> int:
                 pass
 
         logger.info(
-            "Deleted %d expired upload(s), %d file(s), %d orphan file(s).",
+            "Deleted %d expired upload(s), %d file(s), %d orphan file(s); "
+            "held %d for an open request.",
             rows,
             files,
             removed_orphans,
+            len(kept),
         )
         return 0
     finally:

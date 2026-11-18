@@ -9,10 +9,24 @@ from typing import Any
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.models import AuditLog, Certificate, CertificateStatus, Institution, User, Verification
+from app.models import (
+    AuditLog,
+    Certificate,
+    CertificateStatus,
+    Institution,
+    ReviewCase,
+    ReviewStatus,
+    User,
+    Verification,
+)
 from app.services.verification.engine import VerificationResult
 
 RECENT_DAYS = 7
+
+# A verification request open longer than this is overdue on the dashboard.
+# Mirrors `services.reviews.STALE_DAYS`, which is the same promise to the
+# verifier; kept as its own constant so this module stays read-only.
+STALE_REQUEST_DAYS = 7
 
 
 def _count(db: Session, stmt: Select[Any]) -> int:
@@ -65,6 +79,9 @@ def stats(db: Session) -> dict[str, Any]:
         for result in VerificationResult
     }
 
+    open_requests = select(ReviewCase).where(ReviewCase.status != ReviewStatus.CLOSED.value)
+    stale_before = datetime.now(UTC) - timedelta(days=STALE_REQUEST_DAYS)
+
     return {
         "institutions": _count(db, select(Institution)),
         "institutions_active": _count(
@@ -77,6 +94,12 @@ def stats(db: Session) -> dict[str, Any]:
         ),
         "verifications": sum(by_result.values()),
         "verifications_by_result": by_result,
+        # Tier 2 item 9. An institution that never answers is the failure mode
+        # worth watching, so the overdue count sits beside the open one.
+        "requests_open": _count(db, open_requests),
+        "requests_open_over_7_days": _count(
+            db, open_requests.where(ReviewCase.created_at < stale_before)
+        ),
         "last_7_days": {
             "certificates": _count(db, select(Certificate).where(Certificate.created_at >= since)),
             "verifications": _count(

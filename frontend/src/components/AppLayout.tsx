@@ -5,6 +5,7 @@ import type { components } from '@/api/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useLogout, useMe } from '@/hooks/useAuth';
+import { useReviewCounts } from '@/hooks/useReviews';
 import { cn } from '@/lib/utils';
 
 type Role = components['schemas']['Role'];
@@ -19,6 +20,8 @@ interface NavItem {
   to: string;
   label: string;
   roles?: Role[];
+  /** Show the open-request count beside the label. */
+  badge?: 'requests';
 }
 
 const NAV: NavItem[] = [
@@ -27,6 +30,11 @@ const NAV: NavItem[] = [
   { to: '/certificates/import', label: 'Import CSV', roles: ['institution'] },
   { to: '/verify', label: 'Verify', roles: ['verifier', 'admin'] },
   { to: '/verifications', label: 'History', roles: ['verifier', 'admin'] },
+  // Same route for everyone, labelled for who is reading it: work to do for
+  // an institution, answers awaited for a verifier.
+  { to: '/requests', label: 'Requests', roles: ['verifier'], badge: 'requests' },
+  { to: '/requests', label: 'Verification requests', roles: ['institution'], badge: 'requests' },
+  { to: '/requests', label: 'Requests', roles: ['admin'], badge: 'requests' },
   { to: '/admin/institutions', label: 'Institutions', roles: ['admin'] },
   { to: '/admin/audit', label: 'Audit log', roles: ['admin'] },
 ];
@@ -35,10 +43,13 @@ const NAV: NavItem[] = [
 export default function AppLayout() {
   const { data: user } = useMe();
   const logout = useLogout();
+  // Scoped server-side, so one query serves every role.
+  const counts = useReviewCounts(Boolean(user));
 
   if (!user) return null;
 
   const items = NAV.filter((item) => !item.roles || item.roles.includes(user.role));
+  const openRequests = counts.data?.open ?? 0;
 
   return (
     <div className="min-h-screen bg-muted/40">
@@ -50,7 +61,7 @@ export default function AppLayout() {
           <nav className="order-last flex w-full flex-wrap gap-1 sm:order-none sm:w-auto sm:flex-1">
             {items.map((item) => (
               <NavLink
-                key={item.to}
+                key={`${item.to}-${item.label}`}
                 to={item.to}
                 end
                 className={({ isActive }) =>
@@ -61,6 +72,14 @@ export default function AppLayout() {
                 }
               >
                 {item.label}
+                {item.badge === 'requests' && openRequests > 0 && (
+                  <span
+                    className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground"
+                    aria-label={`${openRequests} open`}
+                  >
+                    {openRequests}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

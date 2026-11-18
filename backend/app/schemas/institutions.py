@@ -43,6 +43,21 @@ class InstitutionCreate(BaseModel):
         return out
 
 
+class InstitutionOption(BaseModel):
+    """An institution as a choice in a form — name, code, nothing else.
+
+    Deliberately not `InstitutionOut`: that carries the public key, the user
+    count and the certificate count, which are an admin's business. A verifier
+    picking who to ask needs a label and an id.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    code: str
+
+
 class InstitutionUpdate(BaseModel):
     """Only the display name and the active flag can change. The code and the
     key are fixed: signatures already issued refer to them."""

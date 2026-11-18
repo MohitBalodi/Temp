@@ -42,4 +42,6 @@ class AdminStats(BaseModel):
     certificates_revoked: int
     verifications: int
     verifications_by_result: ResultCounts
+    requests_open: int = 0
+    requests_open_over_7_days: int = 0
     last_7_days: RecentCounts = Field(description="Rolling window, not calendar weeks.")

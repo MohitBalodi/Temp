@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleHelp, MinusCircle, Printer, XCircle } from 'lucide-react';
 
 import ExtractedFieldsTable from '@/components/ExtractedFieldsTable';
+import VerificationRequests from '@/components/VerificationRequests';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Verification, VerificationCheck } from '@/hooks/useVerify';
@@ -145,9 +146,15 @@ interface Props {
   verification: Verification;
   /** Show the banner, the audit trail and the print button (the result page). */
   full?: boolean;
+  /** Open the "ask the institution" dialog. Only the result page passes it. */
+  onRequestConfirmation?: () => void;
 }
 
-export default function VerificationResult({ verification, full = false }: Props) {
+export default function VerificationResult({
+  verification,
+  full = false,
+  onRequestConfirmation,
+}: Props) {
   const result = RESULTS[verification.result] ?? {
     label: verification.result,
     explanation: '',
@@ -217,6 +224,10 @@ export default function VerificationResult({ verification, full = false }: Props
       </Card>
 
       <ExtractedFieldsTable verification={verification} />
+
+      {onRequestConfirmation && (
+        <VerificationRequests verification={verification} onRequest={onRequestConfirmation} />
+      )}
 
       <Card>
         <CardHeader className="pb-1">

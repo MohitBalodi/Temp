@@ -65,6 +65,41 @@ export default function AdminStatsCards() {
         />
       </div>
 
+      {/* Tier 2 item 9. The failure mode worth watching is an institution
+          that never answers, so the overdue count sits beside the open one. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Verification requests</CardTitle>
+          <CardDescription>
+            Verifiers waiting on an institution to confirm a document.{' '}
+            <Link to="/requests" className="underline">
+              All requests
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Open</dt>
+              <dd className="text-2xl font-semibold tabular-nums">{data.requests_open}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                Open more than 7 days
+              </dt>
+              <dd
+                className={cn(
+                  'text-2xl font-semibold tabular-nums',
+                  data.requests_open_over_7_days > 0 && 'text-amber-600',
+                )}
+              >
+                {data.requests_open_over_7_days}
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Verification results</CardTitle>

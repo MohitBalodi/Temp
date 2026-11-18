@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.models import Upload
+from app.models import ReviewCase, ReviewStatus, Upload, Verification
 from app.services.hashing import sha256_bytes
 
 MIME_PDF = "application/pdf"
@@ -127,14 +127,41 @@ def get(db: Session, upload_id: uuid.UUID) -> Upload | None:
     return db.get(Upload, upload_id)
 
 
+def held_upload_ids(db: Session) -> set[uuid.UUID]:
+    """Uploads an open verification request is about.
+
+    Retention must not delete the document while an institution is being
+    asked to look at it — the case page would show a broken preview and the
+    evidence behind the institution's answer would be gone. The hold lasts
+    exactly as long as the case is open: once it closes, the ordinary
+    expiry applies and the next prune takes the file.
+    """
+    return set(
+        db.scalars(
+            select(Verification.upload_id)
+            .join(ReviewCase, ReviewCase.verification_id == Verification.id)
+            .where(
+                Verification.upload_id.is_not(None),
+                ReviewCase.status != ReviewStatus.CLOSED.value,
+            )
+        )
+    )
+
+
 def prune_expired(db: Session, *, now: datetime | None = None) -> tuple[int, int]:
     """Delete uploads whose retention has passed, with their files.
 
     Returns (rows deleted, files removed). A file that is already gone is not
-    an error — the row still goes. The caller commits.
+    an error — the row still goes. An upload held by an open verification
+    request is skipped, however old it is. The caller commits.
     """
     now = now or datetime.now(UTC)
-    rows = list(db.scalars(select(Upload).where(Upload.expires_at <= now)))
+    held = held_upload_ids(db)
+    rows = [
+        row
+        for row in db.scalars(select(Upload).where(Upload.expires_at <= now))
+        if row.id not in held
+    ]
 
     files_removed = 0
     for row in rows:

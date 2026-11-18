@@ -99,6 +99,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/institutions/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Institution Options
+         * @description Active institutions as form choices, for any signed-in user.
+         *
+         *     A verifier needs this to address a verification request when the document
+         *     identified no institution. It exposes a name and a code — which are on
+         *     every issued certificate anyway — and not the registry behind them.
+         *     Declared before `/{institution_id}` so "options" is not read as an id.
+         */
+        get: operations["institution_options_api_v1_institutions_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/institutions/{institution_id}": {
         parameters: {
             query?: never;
@@ -337,6 +362,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reviews
+         * @description Requests this user may see, most recently updated first.
+         */
+        get: operations["list_reviews_api_v1_reviews_get"];
+        put?: never;
+        /**
+         * Create Review
+         * @description Ask an institution to confirm a verification the system could not settle.
+         */
+        post: operations["create_review_api_v1_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Review Counts
+         * @description Open and overdue counts, scoped like the list: the nav badge and the
+         *     admin dashboard card both read this.
+         */
+        get: operations["review_counts_api_v1_reviews_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Review */
+        get: operations["get_review_api_v1_reviews__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{case_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Review Document
+         * @description The uploaded document itself, for the institution to look at.
+         *
+         *     This is the one place a document a verifier uploaded leaves the
+         *     verification pipeline, and it is the point of the feature: an institution
+         *     cannot confirm a certificate it is not allowed to see. Scoped exactly like
+         *     the case, so only the institution asked, the verifier who asked, and an
+         *     admin can fetch it. `inline` so a browser previews rather than downloads.
+         */
+        get: operations["get_review_document_api_v1_reviews__case_id__document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{case_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Message
+         * @description Reply on a case. A verifier answering a `needs_info` question puts it
+         *     back to `pending`.
+         */
+        post: operations["post_message_api_v1_reviews__case_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{case_id}/needs-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask For Info
+         * @description The institution asks the verifier for more before answering.
+         */
+        post: operations["ask_for_info_api_v1_reviews__case_id__needs_info_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{case_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide
+         * @description Answer a request. Closes the case; the verification is left untouched.
+         */
+        post: operations["decide_api_v1_reviews__case_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit": {
         parameters: {
             query?: never;
@@ -390,6 +564,16 @@ export interface components {
             /** Verifications */
             verifications: number;
             verifications_by_result: components["schemas"]["ResultCounts"];
+            /**
+             * Requests Open
+             * @default 0
+             */
+            requests_open: number;
+            /**
+             * Requests Open Over 7 Days
+             * @default 0
+             */
+            requests_open_over_7_days: number;
             /** @description Rolling window, not calendar weeks. */
             last_7_days: components["schemas"]["RecentCounts"];
         };
@@ -441,6 +625,40 @@ export interface components {
          * @description POST /certificates. The institution is taken from the logged-in user.
          */
         CertificateCreate: {
+            /** Cert Number */
+            cert_number: string;
+            /** Student Name */
+            student_name: string;
+            /** Roll Number */
+            roll_number: string;
+            /** Programme */
+            programme: string;
+            /** Year Of Passing */
+            year_of_passing: number;
+            /**
+             * Cgpa
+             * @description 0–10 scale
+             */
+            cgpa?: number | string | null;
+            /**
+             * Marks
+             * @description Percentage, 0–100
+             */
+            marks?: number | string | null;
+            /**
+             * Issue Date
+             * Format: date
+             * @description YYYY-MM-DD
+             */
+            issue_date: string;
+        };
+        /**
+         * CertificateFields
+         * @description Fields an institution supplies for a certificate. Values come out
+         *     normalized: IDs in normalized form, text with whitespace collapsed,
+         *     grades rounded to two decimals.
+         */
+        CertificateFields: {
             /** Cert Number */
             cert_number: string;
             /** Student Name */
@@ -521,6 +739,33 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * ConfirmAndAddDecision
+         * @description `Confirm & add to registry`: the certificate to create, as the
+         *     institution edited it. Validated exactly like a direct create, because it
+         *     *is* one — same service, same signature, same issued PDF.
+         */
+        ConfirmAndAddDecision: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            decision: "confirmed_added";
+            certificate: components["schemas"]["CertificateFields"];
+        };
+        /**
+         * ConfirmDecision
+         * @description `Confirm genuine`. A note is optional — the decision speaks for itself.
+         */
+        ConfirmDecision: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            decision: "confirmed";
+            /** Note */
+            note?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -586,6 +831,22 @@ export interface components {
              * @description Shown once. It is not stored in plain text anywhere.
              */
             password: string;
+        };
+        /**
+         * InstitutionOption
+         * @description An institution as a choice in a form — name, code, nothing else.
+         *
+         *     Deliberately not `InstitutionOut`: that carries the public key, the user
+         *     count and the certificate count, which are an admin's business. A verifier
+         *     picking who to ask needs a label and an id.
+         */
+        InstitutionOption: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Code */
+            code: string;
         };
         /** InstitutionOut */
         InstitutionOut: {
@@ -660,6 +921,41 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MessageCreate */
+        MessageCreate: {
+            /** Body */
+            body: string;
+        };
+        /** MessageOut */
+        MessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Body */
+            body: string;
+            author: components["schemas"]["UserSummary"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * NotIssuedDecision
+         * @description `Not issued by us`. The reason is required, not decorative: this is the
+         *     one answer a holder can be harmed by.
+         */
+        NotIssuedDecision: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            decision: "not_issued";
+            /** Reason */
+            reason: string;
+        };
         /** Page[AuditOut] */
         Page_AuditOut_: {
             /** Items */
@@ -686,6 +982,17 @@ export interface components {
         Page_InstitutionOut_: {
             /** Items */
             items: components["schemas"]["InstitutionOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
+        /** Page[ReviewListItem] */
+        Page_ReviewListItem_: {
+            /** Items */
+            items: components["schemas"]["ReviewListItem"][];
             /** Total */
             total: number;
             /** Page */
@@ -755,6 +1062,193 @@ export interface components {
              */
             MANUAL_REVIEW: number;
         };
+        /** ReviewCounts */
+        ReviewCounts: {
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Open Over 7 Days
+             * @default 0
+             */
+            open_over_7_days: number;
+        };
+        /**
+         * ReviewCreate
+         * @description What a verifier sends to open a request.
+         */
+        ReviewCreate: {
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
+            /**
+             * Institution Id
+             * @description Required only when the document identified no institution; ignored when it did, because a known certificate is always sent to its own issuer.
+             */
+            institution_id?: number | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * ReviewListItem
+         * @description A row in either inbox: enough to triage, no thread, no document.
+         */
+        ReviewListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
+            /** Cert Number */
+            cert_number: string | null;
+            /**
+             * Result
+             * @description The result that prompted the request.
+             */
+            result: string;
+            institution: components["schemas"]["InstitutionSummary"];
+            requester: components["schemas"]["UserSummary"];
+            /**
+             * Status
+             * @description pending | needs_info | closed
+             */
+            status: string;
+            /**
+             * Decision
+             * @description confirmed | confirmed_added | not_issued
+             */
+            decision?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ReviewOut
+         * @description One case in full: the thread, the verification behind it, and — for the
+         *     institution — its own matching record and a prefilled draft.
+         */
+        ReviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
+            /** Cert Number */
+            cert_number: string | null;
+            institution: components["schemas"]["InstitutionSummary"];
+            requester: components["schemas"]["UserSummary"];
+            /** Status */
+            status: string;
+            /** Note */
+            note: string | null;
+            /** Decision */
+            decision: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            decider?: components["schemas"]["UserSummary"] | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Messages
+             * @default []
+             */
+            messages: components["schemas"]["MessageOut"][];
+            verification?: components["schemas"]["VerificationOut"] | null;
+            /** @description The institution's own record for this document, if it has one. */
+            registry_match?: components["schemas"]["CertificateOut"] | null;
+            /**
+             * Prefill
+             * @description A draft for 'confirm & add', from what the document said. Editable.
+             */
+            prefill?: {
+                [key: string]: string;
+            };
+            /**
+             * Document Available
+             * @description Whether the uploaded file can still be fetched.
+             * @default false
+             */
+            document_available: boolean;
+            /**
+             * Can Decide
+             * @description True for the institution asked, while the case is open.
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Can Reply
+             * @default false
+             */
+            can_reply: boolean;
+        };
+        /**
+         * ReviewSummary
+         * @description A request made about this verification, as the result page shows it.
+         *
+         *     Defined here rather than imported from `schemas.reviews` because that
+         *     module imports `VerificationOut` — the dependency runs one way only.
+         */
+        ReviewSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @description pending | needs_info | closed
+             */
+            status: string;
+            /**
+             * Decision
+             * @description confirmed | confirmed_added | not_issued
+             */
+            decision?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Institution Name */
+            institution_name: string;
+            /** Institution Code */
+            institution_code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at?: string | null;
+        };
         /**
          * RevokeRequest
          * @description Revocation always carries a reason: the audit trail should say why.
@@ -812,6 +1306,13 @@ export interface components {
             is_active: boolean;
             institution?: components["schemas"]["InstitutionSummary"] | null;
         };
+        /** UserSummary */
+        UserSummary: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -867,6 +1368,11 @@ export interface components {
              */
             extracted_fields?: Record<string, never> | null;
             verifier?: components["schemas"]["VerifierSummary"] | null;
+            /**
+             * Reviews
+             * @description Requests sent to the issuing institution about this result, newest first.
+             */
+            reviews?: components["schemas"]["ReviewSummary"][];
             /**
              * Created At
              * Format: date-time
@@ -1074,6 +1580,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    institution_options_api_v1_institutions_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionOption"][];
                 };
             };
         };
@@ -1590,6 +2116,265 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reviews_api_v1_reviews_get: {
+        parameters: {
+            query?: {
+                /** @description pending | needs_info | closed | open */
+                status?: string | null;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ReviewListItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_review_api_v1_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_counts_api_v1_reviews_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewCounts"];
+                };
+            };
+        };
+    };
+    get_review_api_v1_reviews__case_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_review_document_api_v1_reviews__case_id__document_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No document, or it is no longer stored */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_message_api_v1_reviews__case_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_for_info_api_v1_reviews__case_id__needs_info_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_api_v1_reviews__case_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmDecision"] | components["schemas"]["ConfirmAndAddDecision"] | components["schemas"]["NotIssuedDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
                 };
             };
             /** @description Validation Error */

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.certificate import Certificate
+from app.models.upload import Upload
 from app.models.user import User
 
 # The domain owns these; the table only constrains them. Re-exported so callers
@@ -43,6 +44,13 @@ class Verification(Base):
     certificate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("certificates.id", ondelete="RESTRICT"), nullable=True
     )
+    # The document this verification read, for an upload. Needed because a
+    # review case shows the institution the very file that was uploaded, and
+    # because upload retention has to leave that file alone while the case is
+    # open.
+    upload_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True
+    )
     result: Mapped[str] = mapped_column(String(16), index=True)
     checks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
     extracted_fields: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -52,6 +60,39 @@ class Verification(Base):
 
     certificate: Mapped[Certificate | None] = relationship(lazy="joined")
     verifier: Mapped[User] = relationship(lazy="joined")
+    # Lazy on purpose: only a review case ever needs the document row, and
+    # every verification list query would otherwise join a table it ignores.
+    upload: Mapped[Upload | None] = relationship(lazy="select")
+    # Requests made about this verification, newest first. The verification
+    # itself is never edited by one — the institution's answer is shown
+    # beside the original result, not folded into it.
+    cases: Mapped[list["ReviewCase"]] = relationship(  # noqa: F821  (resolved by mapper)
+        back_populates="verification",
+        order_by="ReviewCase.created_at.desc()",
+        lazy="select",
+    )
+
+    @property
+    def reviews(self) -> list[dict[str, Any]]:
+        """The requests about this verification, flattened for the response.
+
+        A property rather than a second relationship: the result page wants
+        the institution's name beside the decision, and that is presentation,
+        not a new association.
+        """
+        return [
+            {
+                "id": case.id,
+                "status": case.status,
+                "decision": case.decision,
+                "decision_note": case.decision_note,
+                "institution_name": case.institution.name,
+                "institution_code": case.institution.code,
+                "created_at": case.created_at,
+                "decided_at": case.decided_at,
+            }
+            for case in self.cases
+        ]
 
     @property
     def cert_number(self) -> str | None:

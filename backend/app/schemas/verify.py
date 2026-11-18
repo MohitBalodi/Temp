@@ -63,6 +63,27 @@ class VerifierSummary(BaseModel):
     email: str
 
 
+class ReviewSummary(BaseModel):
+    """A request made about this verification, as the result page shows it.
+
+    Defined here rather than imported from `schemas.reviews` because that
+    module imports `VerificationOut` — the dependency runs one way only.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: str = Field(description="pending | needs_info | closed")
+    decision: str | None = Field(
+        default=None, description="confirmed | confirmed_added | not_issued"
+    )
+    decision_note: str | None = None
+    institution_name: str
+    institution_code: str
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
 class VerificationListItem(BaseModel):
     """A row in a verifier's history — no checks, no record."""
 
@@ -89,4 +110,8 @@ class VerificationOut(BaseModel):
         default=None, description="What the request itself carried (number, QR fields)."
     )
     verifier: VerifierSummary | None = None
+    reviews: list[ReviewSummary] = Field(
+        default_factory=list,
+        description="Requests sent to the issuing institution about this result, newest first.",
+    )
     created_at: datetime

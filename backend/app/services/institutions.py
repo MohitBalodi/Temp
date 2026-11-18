@@ -57,6 +57,16 @@ def list_institutions(db: Session, *, page: int, size: int) -> tuple[list[Instit
     return _with_counts(db, items), total
 
 
+def list_active(db: Session) -> list[Institution]:
+    """Every active institution, by code. Small by nature — one row per
+    institution on the platform — so it is not paginated."""
+    return list(
+        db.scalars(
+            select(Institution).where(Institution.is_active.is_(True)).order_by(Institution.code)
+        ).all()
+    )
+
+
 def get_institution(db: Session, institution_id: int) -> Institution:
     institution = db.get(Institution, institution_id)
     if institution is None:
