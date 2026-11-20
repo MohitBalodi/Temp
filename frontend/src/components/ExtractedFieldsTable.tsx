@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleHelp, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Verification } from '@/hooks/useVerify';
@@ -97,15 +97,28 @@ function registryValue(verification: Verification, name: string): string | null 
   }
 }
 
-/** The per-field check the engine recorded, e.g. `field_match.cgpa`. */
-function statusOf(verification: Verification, name: string): string | null {
+/**
+ * How a field came out, in one word.
+ *
+ * Reads the engine's `state` (what the document said) before its `status`
+ * (what the check made of it), because the two come apart where it matters: a
+ * value read at 76% that disagrees is `uncertain` as evidence but it still
+ * *differs*, and "uncertain" would hide that from the verifier.
+ */
+function outcomeOf(verification: Verification, name: string): keyof typeof STATUS_STYLES | null {
   const check = verification.checks.find((c) => c.name === `field_match.${name}`);
-  return check?.status ?? null;
+  if (!check) return null;
+  if (check.state === 'not_read') return 'not_read';
+  if (check.state === 'differs') return check.status === 'fail' ? 'fail' : 'differs';
+  if (check.state === 'matches') return 'pass';
+  return (check.status as keyof typeof STATUS_STYLES) ?? null;
 }
 
 const STATUS_STYLES = {
   pass: { Icon: CheckCircle2, className: 'text-emerald-600', label: 'matches' },
   fail: { Icon: XCircle, className: 'text-red-600', label: 'conflicts' },
+  differs: { Icon: AlertTriangle, className: 'text-amber-600', label: 'differs' },
+  not_read: { Icon: CircleHelp, className: 'text-muted-foreground', label: 'not read' },
   uncertain: { Icon: CircleHelp, className: 'text-amber-500', label: 'uncertain' },
 } as const;
 
@@ -177,8 +190,8 @@ export default function ExtractedFieldsTable({ verification }: { verification: V
                 {names.map((name) => {
                   const field = fields[name];
                   const expected = registryValue(verification, name);
-                  const status = statusOf(verification, name);
-                  const style = status ? STATUS_STYLES[status as keyof typeof STATUS_STYLES] : null;
+                  const outcome = outcomeOf(verification, name);
+                  const style = outcome ? STATUS_STYLES[outcome] : null;
                   return (
                     <tr key={name} className="print-keep align-top">
                       <td className="py-2 pr-4 font-medium">{FIELD_LABELS[name] ?? name}</td>

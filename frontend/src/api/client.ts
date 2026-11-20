@@ -8,7 +8,10 @@ export type TokenPair = components['schemas']['TokenPair'];
 export type UserOut = components['schemas']['UserOut'];
 export type LoginRequest = components['schemas']['LoginRequest'];
 
-const baseURL = `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'}/api/v1`;
+// Relative by default: the Vite dev server proxies /api to the API, so the
+// browser only ever talks to the origin it loaded from. Set
+// VITE_API_BASE_URL to an absolute URL to bypass the proxy.
+const baseURL = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1`;
 
 export const api = axios.create({ baseURL });
 

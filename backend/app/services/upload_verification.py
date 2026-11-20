@@ -43,7 +43,11 @@ logger = logging.getLogger(__name__)
 
 
 def _thresholds() -> Thresholds:
-    return Thresholds(min_field_confidence=settings.ocr_min_field_confidence)
+    return Thresholds(
+        min_field_confidence=settings.ocr_min_field_confidence,
+        min_discrepancy_confidence=settings.ocr_discrepancy_confidence,
+        min_matched_fields=settings.qr_min_matched_fields,
+    )
 
 
 def _by_file_hash(db: Session, sha256: str) -> Certificate | None:

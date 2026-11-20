@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.services.qr import QrPayload
 from app.services.signing import CertificateRecord, public_key_pem, sign_record
 from app.services.verification.engine import (
+    CHECK_DOCUMENT_CONTENT,
     CHECK_FIELD_MATCH,
     CHECK_FILE_HASH,
     CHECK_QR_SIGNATURE,
@@ -227,6 +228,7 @@ def test_checks_are_stable_and_serializable(key: Ed25519PrivateKey) -> None:
         CHECK_QR_SIGNATURE,
         CHECK_FILE_HASH,
         CHECK_FIELD_MATCH,
+        CHECK_DOCUMENT_CONTENT,
     ]
     for item in outcome.checks_as_dicts():
         assert set(item) == {"name", "status", "detail"}

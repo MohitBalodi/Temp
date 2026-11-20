@@ -7,9 +7,10 @@ Results are VERIFIED / MISMATCH / REVOKED / MANUAL_REVIEW — never "fake" or
 "forged". Absence of evidence is not fraud: an unknown number, an unreadable
 document or a missing field all go to MANUAL_REVIEW, not to an accusation.
 
-Only the checks that need no uploaded file live here so far (registry_lookup,
-revocation, record_signature, qr_signature). file_hash and field_match join
-them with the upload pipeline (Tier 2).
+The checks, in the order `evaluate` returns them: registry_lookup, revocation,
+record_signature, qr_signature, file_hash, one field_match.<field> per
+compared critical field, and document_content — the last being the conclusion
+drawn from the field checks, and the one check a signature cannot answer.
 """
 
 from dataclasses import dataclass, field
@@ -31,10 +32,20 @@ CHECK_RECORD_SIGNATURE = "record_signature"
 CHECK_QR_SIGNATURE = "qr_signature"
 CHECK_FILE_HASH = "file_hash"
 CHECK_FIELD_MATCH = "field_match"
+# Not in the spec's list of checks: the summary of whether the *document*
+# presented could be confirmed against the record, as distinct from whether
+# the record is genuine. A signature proves the second, never the first.
+CHECK_DOCUMENT_CONTENT = "document_content"
 
 # The fields a verdict may turn on (project spec, "Critical fields"). The grade
 # is one logical field with two possible carriers, so cgpa and marks are
 # compared only when the registry record actually holds that one.
+#
+# `issue_date` is compared too, though the spec's list does not name it: it is
+# printed on the certificate, it is in the signed record, and a reprint dated
+# differently from the issue the institution recorded is exactly the kind of
+# difference a verifier should be shown. Leaving it out meant the result page
+# said "not checked" beside a value we had in both hands.
 CRITICAL_FIELDS = (
     "cert_number",
     "student_name",
@@ -43,6 +54,7 @@ CRITICAL_FIELDS = (
     "year_of_passing",
     "cgpa",
     "marks",
+    "issue_date",
 )
 
 # Identifiers tolerate OCR character confusions on both sides; everything else
@@ -60,6 +72,7 @@ _FIELD_LABELS = {
     "year_of_passing": "The year of passing",
     "cgpa": "The CGPA",
     "marks": "The marks",
+    "issue_date": "The date of issue",
 }
 
 
@@ -87,6 +100,22 @@ class CheckStatus(StrEnum):
     UNCERTAIN = "uncertain"
 
 
+class FieldState(StrEnum):
+    """What the document said about a field, beside whether its check passed.
+
+    `status` answers "is this evidence for or against"; `state` answers "what
+    is actually printed there", and the two come apart exactly where it
+    matters. A value read at 76% that disagrees with the registry is
+    `uncertain` as evidence — it cannot carry a MISMATCH on its own — but it
+    *differs*, and a verifier must be shown that rather than a shrug. A value
+    nobody could read differs from nothing.
+    """
+
+    MATCHES = "matches"
+    DIFFERS = "differs"
+    NOT_READ = "not_read"
+
+
 @dataclass(frozen=True, slots=True)
 class Check:
     """One piece of evidence behind the result. Stored in `verifications.checks`
@@ -95,9 +124,14 @@ class Check:
     name: str
     status: CheckStatus
     detail: str
+    # Only field_match entries carry this; the other checks compare nothing.
+    state: FieldState | None = None
 
     def as_dict(self) -> dict[str, str]:
-        return {"name": self.name, "status": self.status.value, "detail": self.detail}
+        out = {"name": self.name, "status": self.status.value, "detail": self.detail}
+        if self.state is not None:
+            out["state"] = self.state.value
+        return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,9 +198,17 @@ class Thresholds:
     """Tunables, passed in rather than read from config, so the engine stays
     pure and every rule path is testable at a chosen threshold."""
 
-    # Below this an extracted field is uncertain: it can send a result to
-    # MANUAL_REVIEW but must never produce a MISMATCH.
+    # At or above this, a field that disagrees is a conflict: MISMATCH.
     min_field_confidence: float = 0.85
+    # At or above this (but below the one above), a field that disagrees is a
+    # *possible* discrepancy: not certain enough to accuse the document, far
+    # too clear to call it VERIFIED. Below it, the reading is too unsure to
+    # mean anything and the field counts as not read.
+    min_discrepancy_confidence: float = 0.50
+    # How many critical fields must be read *and* match before an uploaded
+    # document's printed content counts as confirmed. The student name must be
+    # one of them (see `_document_content`).
+    min_matched_fields: int = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,12 +347,17 @@ def _file_hash(data: VerificationInput) -> Check:
 
 
 def _compare_field(
-    name: str, extracted: ExtractedFieldValue, expected: str, threshold: float
+    name: str, extracted: ExtractedFieldValue, expected: str, thresholds: Thresholds
 ) -> Check:
-    """One field_match entry."""
+    """One field_match entry: what the document said, and what to make of it.
+
+    Three bands, because confidence is not a yes/no. A reading that disagrees
+    is a conflict only when the recogniser was sure of it; one it was
+    moderately sure of is a discrepancy a human should look at; one it was
+    unsure of is not a reading at all.
+    """
     check_name = f"{CHECK_FIELD_MATCH}.{name}"
     found = extracted.value
-
     label = _label(name)
 
     if found is None:
@@ -319,26 +366,44 @@ def _compare_field(
             CheckStatus.UNCERTAIN,
             f"{label} could not be read from the document, so it was not checked against "
             f"the registry's {expected}.",
+            state=FieldState.NOT_READ,
         )
 
     agrees = ids_match(found, expected) if name in _ID_FIELDS else found == expected
     if agrees:
-        return Check(check_name, CheckStatus.PASS, f"{label} matches the registry: {expected}.")
+        return Check(
+            check_name,
+            CheckStatus.PASS,
+            f"{label} matches the registry: {expected}.",
+            state=FieldState.MATCHES,
+        )
 
-    if extracted.confidence < threshold:
+    if extracted.confidence >= thresholds.min_field_confidence:
+        return Check(
+            check_name,
+            CheckStatus.FAIL,
+            f"{label} on the document is {found!r}, but the registry has {expected!r} "
+            f"(read with {extracted.confidence:.0%} confidence).",
+            state=FieldState.DIFFERS,
+        )
+
+    if extracted.confidence >= thresholds.min_discrepancy_confidence:
         return Check(
             check_name,
             CheckStatus.UNCERTAIN,
-            f"{label} was read as {found!r} but the registry has {expected!r}. The reading "
-            f"is only {extracted.confidence:.0%} confident, below the {threshold:.0%} "
-            "threshold, so it is not treated as a conflict.",
+            f"{label} on the document reads {found!r}, but the registry has {expected!r}. "
+            f"At {extracted.confidence:.0%} confidence that is not certain enough to call a "
+            "conflict, so it is a possible discrepancy for a person to look at.",
+            state=FieldState.DIFFERS,
         )
 
     return Check(
         check_name,
-        CheckStatus.FAIL,
-        f"{label} on the document is {found!r}, but the registry has {expected!r} "
-        f"(read with {extracted.confidence:.0%} confidence).",
+        CheckStatus.UNCERTAIN,
+        f"{label} could not be read from the document — what was read ({found!r}) is only "
+        f"{extracted.confidence:.0%} confident, too unsure to compare against the registry's "
+        f"{expected}.",
+        state=FieldState.NOT_READ,
     )
 
 
@@ -363,7 +428,6 @@ def _field_match(data: VerificationInput) -> list[Check]:
             )
         ]
 
-    threshold = data.thresholds.min_field_confidence
     checks: list[Check] = []
     for name in CRITICAL_FIELDS:
         expected = data.record.field_value(name)
@@ -379,10 +443,11 @@ def _field_match(data: VerificationInput) -> list[Check]:
                     CheckStatus.UNCERTAIN,
                     f"{_label(name)} was not found on the document, so it was not checked "
                     f"against the registry's {expected}.",
+                    state=FieldState.NOT_READ,
                 )
             )
             continue
-        checks.append(_compare_field(name, extracted, expected, threshold))
+        checks.append(_compare_field(name, extracted, expected, data.thresholds))
 
     if not checks:
         return [
@@ -395,16 +460,117 @@ def _field_match(data: VerificationInput) -> list[Check]:
     return checks
 
 
+def _document_content(data: VerificationInput, field_checks: list[Check]) -> Check:
+    """Whether the *document* presented can be confirmed against the record.
+
+    This is the check the QR cannot answer. A valid Ed25519 signature proves
+    the registry record is genuine and was issued by the institution named in
+    it; it says nothing about the sheet of paper in the verifier's hand, which
+    may carry a real QR beside printed details that are unreadable, or simply
+    not the ones that were signed. Treating the signature as the whole answer
+    meant a document whose layout matched nothing at all — every field "not
+    checked" — came back VERIFIED on the strength of someone else's record.
+
+    So an uploaded document has to say who it belongs to before it is
+    verified: the student name must have been read and matched, at least
+    `min_matched_fields` critical fields must match, and nothing may differ.
+    Anything less is reported as unconfirmed — `uncertain`, never `fail`,
+    because an unreadable document is not a forged one.
+    """
+    if data.upload is None:
+        return Check(CHECK_DOCUMENT_CONTENT, CheckStatus.SKIPPED, "No document was uploaded.")
+    if data.record is None:
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.SKIPPED,
+            "No registry record to confirm the document's contents against.",
+        )
+    if data.record.file_sha256 and data.upload.sha256 == data.record.file_sha256:
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.PASS,
+            "The uploaded file is the issued certificate itself, so its contents are the "
+            "institution's own.",
+        )
+
+    need = data.thresholds.min_matched_fields
+    compared = [c for c in field_checks if c.state is not None]
+    matched = [c for c in compared if c.state is FieldState.MATCHES]
+    differing = [c for c in compared if c.state is FieldState.DIFFERS]
+    name_matched = any(
+        c.name == f"{CHECK_FIELD_MATCH}.student_name" and c.state is FieldState.MATCHES
+        for c in compared
+    )
+
+    if data.upload.template is None:
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.UNCERTAIN,
+            "No known layout matched this document, so none of its printed details could be "
+            "checked against the record it points to.",
+        )
+    if differing:
+        said = (
+            "A printed detail does not agree"
+            if len(differing) == 1
+            else f"{len(differing)} printed details do not agree"
+        )
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.UNCERTAIN,
+            f"{said} with the record, so the document's contents are not confirmed.",
+        )
+    if not name_matched:
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.UNCERTAIN,
+            "The student name could not be read from this document and matched against the "
+            "record, so there is nothing to confirm the document belongs to the person named "
+            "in the registry.",
+        )
+    if len(matched) < need:
+        return Check(
+            CHECK_DOCUMENT_CONTENT,
+            CheckStatus.UNCERTAIN,
+            f"Only {len(matched)} of the {len(compared)} printed details could be matched "
+            f"against the record; at least {need} are needed to confirm the document's "
+            "contents.",
+        )
+    return Check(
+        CHECK_DOCUMENT_CONTENT,
+        CheckStatus.PASS,
+        f"{len(matched)} of the {len(compared)} printed details match the record, including the "
+        "student name, and none disagrees.",
+    )
+
+
 # --- decision -----------------------------------------------------------------
 
 
 def _decide(data: VerificationInput, checks: list[Check]) -> VerificationResult:
-    """Decision rules from the project spec, first match wins."""
+    """Decision rules from the project spec, first match wins.
+
+    The one thing to understand here: **VERIFIED requires that nothing
+    differs**. A valid signature proves the registry record was issued by the
+    institution; it says nothing about what is printed on the paper in front
+    of the verifier. So a field that disagrees blocks VERIFIED even when the
+    recogniser was only moderately sure of it — confidently, that is a
+    MISMATCH; less confidently, it is a MANUAL_REVIEW for a person to settle.
+    A field nobody could read is not a disagreement and blocks nothing.
+
+    The same reasoning, taken one step further, is why **a document must also
+    confirm itself**: when a file was uploaded and its bytes are not the
+    issued PDF, a valid QR identifies the record but `document_content` has to
+    confirm the page — otherwise an unreadable document borrows a genuine
+    record's verdict. That verdict is MANUAL_REVIEW ("Unconfirmed"), never
+    MISMATCH: nothing was found against the document, only nothing for it.
+    """
     status = {c.name: c.status for c in checks}
-    field_checks = [c for c in checks if c.name.startswith(CHECK_FIELD_MATCH)]
+    field_checks = [c for c in checks if c.name.startswith(f"{CHECK_FIELD_MATCH}.")]
     conflicting = [c for c in field_checks if c.status is CheckStatus.FAIL]
-    uncertain = [c for c in field_checks if c.status is CheckStatus.UNCERTAIN]
-    compared = [c for c in field_checks if c.status is CheckStatus.PASS]
+    differing = [c for c in field_checks if c.state is FieldState.DIFFERS]
+    matched = [c for c in field_checks if c.state is FieldState.MATCHES]
+    number_matched = any(c.name == f"{CHECK_FIELD_MATCH}.cert_number" for c in matched)
 
     if data.record is None:
         # Rule 6: nothing to compare against. Not a verdict on the document.
@@ -420,43 +586,57 @@ def _decide(data: VerificationInput, checks: list[Check]) -> VerificationResult:
         # the institution issued, so the registry copy cannot be trusted.
         return VerificationResult.MISMATCH
     if status[CHECK_FILE_HASH] is CheckStatus.PASS:
-        # Rule 3: the verifier holds the exact file the institution issued.
-        return VerificationResult.VERIFIED
-    if status[CHECK_QR_SIGNATURE] is CheckStatus.PASS and not conflicting:
-        # Rule 4, and the rule the whole QR-first upload path rests on: a valid
-        # signature plus nothing that confidently contradicts the registry is
-        # VERIFIED. "All extracted critical fields match" is read as "nothing
-        # conflicts", because a valid Ed25519 signature over the record is
-        # cryptographic proof and a field the OCR could not read confidently
-        # must not be allowed to weaken it — those fields are reported as not
-        # checked, beside the registry's own values. A genuine *conflict*
-        # falls through to rule 5, which is what catches an altered document
-        # still carrying its original QR; an invalid signature never gets here
-        # at all, because rule 2 above has already made it a MISMATCH.
+        # Rule 3: the verifier holds the exact file the institution issued, so
+        # anything OCR thinks it read off it is a reading error, not evidence.
         return VerificationResult.VERIFIED
     if conflicting:
-        # Rule 5: a critical field disagrees, read confidently enough to mean it.
+        # Rule 5: a critical field disagrees, read confidently enough to mean
+        # it. This catches an altered document still carrying its original QR,
+        # which is why a valid signature is checked *after* this.
         return VerificationResult.MISMATCH
-    if data.upload is not None and (uncertain or not compared):
-        # Rule 6: unknown layout, unreadable field, or a reading too weak to
-        # act on. Absence of evidence is not fraud.
+    if differing:
+        # A possible discrepancy: too unsure to accuse the document, far too
+        # clear to call it verified. A person decides.
         return VerificationResult.MANUAL_REVIEW
-    if data.upload is not None and compared:
-        # Rule 7: every critical field the registry holds was read and agrees.
+    if data.upload is not None:
+        # A document was presented, so VERIFIED is a statement about *it*, not
+        # only about the record it points to. Two things are required, and the
+        # QR can only supply the first:
+        #
+        #   identified — a valid QR signature, or the certificate number read
+        #       off the page and matching, ties this document to this record;
+        #   confirmed  — its printed contents agree with that record well
+        #       enough to be worth anything (see `_document_content`).
+        #
+        # A genuine QR beside printed details nobody could read gets the first
+        # and not the second: MANUAL_REVIEW, "Unconfirmed".
+        identified = status[CHECK_QR_SIGNATURE] is CheckStatus.PASS or number_matched
+        if identified and status[CHECK_DOCUMENT_CONTENT] is CheckStatus.PASS:
+            return VerificationResult.VERIFIED
+        return VerificationResult.MANUAL_REVIEW
+    if status[CHECK_QR_SIGNATURE] is CheckStatus.PASS:
+        # Rule 4 with no document in play: a scanned QR is a valid signature
+        # over the registry record, and there is nothing else to confirm.
         return VerificationResult.VERIFIED
-    # No upload: a signature-only or number-only verification with nothing wrong.
-    return VerificationResult.VERIFIED
+    if matched or not field_checks:
+        # No upload: a signature-only or number-only verification, where the
+        # number itself was the exact match.
+        return VerificationResult.VERIFIED
+    return VerificationResult.MANUAL_REVIEW
 
 
 def evaluate(data: VerificationInput) -> VerificationOutcome:
     """Run every applicable check and decide. The checks come back in a stable
     order so the result page always lists them the same way."""
+    field_checks = _field_match(data)
     checks = [
         _registry_lookup(data),
         _revocation(data),
         _record_signature(data),
         _qr_signature(data),
         _file_hash(data),
-        *_field_match(data),
+        *field_checks,
+        # Last, because it is the conclusion drawn from the field checks above.
+        _document_content(data, field_checks),
     ]
     return VerificationOutcome(result=_decide(data, checks), checks=checks)

@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleHelp, MinusCircle, Printer, XCircle } from 'lucide-react';
 
+import DocumentMatch from '@/components/DocumentMatch';
 import ExtractedFieldsTable from '@/components/ExtractedFieldsTable';
 import VerificationRequests from '@/components/VerificationRequests';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,27 @@ const RESULTS: Record<
     banner: 'border-amber-200 bg-amber-50 text-amber-900',
     badge: 'bg-amber-500 text-white',
   },
+  // Same verdict, different reason: something on the page disagrees with the
+  // registry, but not clearly enough to call it a conflict. Saying "needs
+  // review" alone would hide the one fact the verifier must act on.
+  MANUAL_REVIEW_DISCREPANCY: {
+    label: 'Possible discrepancy',
+    explanation:
+      'A printed value does not match the registry, but it was not read clearly enough to be certain. Check the difference below against the document in your hand, and ask the issuing institution to confirm.',
+    banner: 'border-amber-300 bg-amber-50 text-amber-900',
+    badge: 'bg-amber-600 text-white',
+  },
+  // A genuine record reached through a genuine QR, beside a document whose
+  // printed content could not be checked against it. Calling that "Verified"
+  // told the verifier the paper in their hand was fine, which nothing had
+  // established.
+  MANUAL_REVIEW_UNCONFIRMED: {
+    label: 'Unconfirmed',
+    explanation:
+      'QR code is genuine — document content could not be confirmed. The QR points to a real record, but the printed details on this document could not be checked against it. Compare the document with the issued details below, or request confirmation from the institution.',
+    banner: 'border-amber-300 bg-amber-50 text-amber-900',
+    badge: 'bg-amber-600 text-white',
+  },
   REVOKED: {
     label: 'Revoked',
     explanation:
@@ -57,6 +79,7 @@ const CHECK_LABELS: Record<string, string> = {
   qr_signature: 'QR signature',
   file_hash: 'File hash',
   field_match: 'Field match',
+  document_content: 'Document contents',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -67,6 +90,7 @@ const FIELD_LABELS: Record<string, string> = {
   year_of_passing: 'year of passing',
   cgpa: 'CGPA',
   marks: 'marks',
+  issue_date: 'date of issue',
 };
 
 /** The engine emits one check per field as `field_match.<field>`. */
@@ -78,26 +102,65 @@ function checkLabel(name: string): string {
   return CHECK_LABELS[name] ?? name;
 }
 
+function statusOf(verification: Verification, name: string): string | undefined {
+  return verification.checks.find((c) => c.name === name)?.status;
+}
+
+/** Field comparisons that actually happened, with how many of them agreed. */
+function tally(verification: Verification): { matched: number; compared: number } {
+  const fields = verification.checks.filter((c) => c.name.startsWith('field_match.') && c.state);
+  return {
+    matched: fields.filter((c) => c.state === 'matches').length,
+    compared: fields.length,
+  };
+}
+
+/**
+ * The record is genuine; the document presented is what could not be confirmed.
+ *
+ * Read off the engine's `document_content` check rather than re-derived here:
+ * the bar (the name read and matched, enough fields matching, nothing
+ * differing) is the engine's rule, and the page must not hold a second,
+ * drifting copy of it.
+ */
+function isUnconfirmed(verification: Verification): boolean {
+  if (verification.result !== 'MANUAL_REVIEW') return false;
+  if (statusOf(verification, 'document_content') !== 'uncertain') return false;
+  // A value that disagrees is a discrepancy, which says more and wins.
+  if (verification.checks.some((c) => c.name.startsWith('field_match.') && c.state === 'differs')) {
+    return false;
+  }
+  const numberMatched = verification.checks.some(
+    (c) => c.name === 'field_match.cert_number' && c.state === 'matches',
+  );
+  return statusOf(verification, 'qr_signature') === 'pass' || numberMatched;
+}
+
 /**
  * Which evidence actually carried the result, said plainly.
  *
  * Derived from the checks rather than sent as its own field: the decision
- * rules in `verification/engine.py` turn on exactly these three checks, so a
+ * rules in `verification/engine.py` turn on exactly these checks, so a
  * sentence read off them cannot drift out of step with the verdict.
  */
-function pathUsed(verification: Verification): string | null {
+function pathUsed(verification: Verification, unconfirmed: boolean): string | null {
   if (verification.method !== 'upload') return null;
-  const statusOf = (name: string) =>
-    verification.checks.find((c) => c.name === name)?.status;
   const compared = verification.checks.some(
     (c) => c.name.startsWith('field_match.') && c.status === 'pass',
   );
   const verb = verification.result === 'VERIFIED' ? 'Verified' : 'Checked';
 
-  if (statusOf('file_hash') === 'pass') {
+  if (statusOf(verification, 'file_hash') === 'pass') {
     return `${verb} by the file itself — these are the exact bytes the institution issued.`;
   }
-  if (statusOf('qr_signature') === 'pass') {
+  if (unconfirmed) {
+    const { matched, compared: total } = tally(verification);
+    const counted = total ? `${matched} of ${total} fields matched` : 'no printed details were read';
+    return statusOf(verification, 'qr_signature') === 'pass'
+      ? `Signed QR verified; printed text not confirmed (${counted}).`
+      : `Certificate number matched; printed text not confirmed (${counted}).`;
+  }
+  if (statusOf(verification, 'qr_signature') === 'pass') {
     return `${verb} by the signed QR code on the document; its printed text was read as a cross-check.`;
   }
   if (compared) {
@@ -155,14 +218,25 @@ export default function VerificationResult({
   full = false,
   onRequestConfirmation,
 }: Props) {
-  const result = RESULTS[verification.result] ?? {
+  // A review caused by a value that disagrees is announced as such.
+  const differs = verification.checks.some(
+    (c) => c.name.startsWith('field_match.') && c.state === 'differs',
+  );
+  const unconfirmed = isUnconfirmed(verification);
+  const key =
+    verification.result === 'MANUAL_REVIEW' && differs
+      ? 'MANUAL_REVIEW_DISCREPANCY'
+      : unconfirmed
+        ? 'MANUAL_REVIEW_UNCONFIRMED'
+        : verification.result;
+  const result = RESULTS[key] ?? {
     label: verification.result,
     explanation: '',
     banner: 'border-zinc-200 bg-zinc-100 text-zinc-900',
     badge: 'bg-zinc-600 text-white',
   };
   const cert = verification.certificate;
-  const path = pathUsed(verification);
+  const path = pathUsed(verification, unconfirmed);
   const number = cert?.cert_number ?? verification.extracted_fields?.cert_number ?? '—';
   const grade = [cert?.cgpa && `CGPA ${cert.cgpa}`, cert?.marks && `${cert.marks}%`]
     .filter(Boolean)
@@ -222,6 +296,8 @@ export default function VerificationResult({
           )}
         </CardContent>
       </Card>
+
+      <DocumentMatch verification={verification} />
 
       <ExtractedFieldsTable verification={verification} />
 

@@ -32,7 +32,16 @@ class Settings(BaseSettings):
     import_max_rows: int = 5000
     import_max_mb: int = 2
 
+    # At or above this, a field that disagrees with the registry is a
+    # conflict (MISMATCH); between the two, a possible discrepancy that blocks
+    # VERIFIED and asks for review; below the lower one, the field counts as
+    # not read at all.
     ocr_min_field_confidence: float = 0.85
+    ocr_discrepancy_confidence: float = 0.50
+    # How many critical fields an uploaded document must have read *and*
+    # matched (the student name among them) before a valid QR or an exact
+    # certificate number may verify it. Below this it is "Unconfirmed".
+    qr_min_matched_fields: int = 3
     name_match_threshold: int = 90
     name_conflict_threshold: int = 75
 

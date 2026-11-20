@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.services.qr import QrPayload
 from app.services.signing import CertificateRecord, public_key_pem, sign_record
 from app.services.verification.engine import (
+    CHECK_DOCUMENT_CONTENT,
     CHECK_FIELD_MATCH,
     CHECK_FILE_HASH,
     CHECK_QR_SIGNATURE,
@@ -22,6 +23,7 @@ from app.services.verification.engine import (
     Check,
     CheckStatus,
     ExtractedFieldValue,
+    FieldState,
     RegistryRecord,
     Thresholds,
     UploadEvidence,
@@ -98,6 +100,7 @@ def upload(
         "programme": "B.TECH COMPUTER SCIENCE",
         "year_of_passing": "2024",
         "cgpa": "8.50",
+        "issue_date": "2024-07-15",
     }
     values.update(overrides)
     return UploadEvidence(
@@ -188,9 +191,16 @@ def test_rule_5_a_confident_conflict_is_a_mismatch(key: Ed25519PrivateKey) -> No
 
 
 def test_rule_5_does_not_fire_below_the_confidence_threshold(key: Ed25519PrivateKey) -> None:
-    """A disagreement OCR is unsure about is uncertain, never a mismatch."""
+    """A disagreement OCR is unsure about is never a mismatch.
+
+    At 10% it is not a reading at all: the field counts as not read, which is
+    listed for the verifier but does not stand in the way of a document that
+    otherwise identifies itself.
+    """
     outcome = evaluate(upload_input(key, upload(cgpa="9.90", confidence=0.10)))
-    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    assert outcome.result is not VerificationResult.MISMATCH
+    cgpa = next(c for c in outcome.checks if c.name == f"{CHECK_FIELD_MATCH}.cgpa")
+    assert cgpa.state is FieldState.NOT_READ
     assert statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.cgpa"] is CheckStatus.UNCERTAIN
 
 
@@ -220,9 +230,17 @@ def test_rule_6_an_unknown_layout_is_manual_review(key: Ed25519PrivateKey) -> No
     assert statuses(outcome.checks)[CHECK_FIELD_MATCH] is CheckStatus.UNCERTAIN
 
 
-def test_rule_6_a_missing_critical_field_is_manual_review(key: Ed25519PrivateKey) -> None:
+def test_a_field_that_could_not_be_read_does_not_block_a_verdict(
+    key: Ed25519PrivateKey,
+) -> None:
+    """A page whose roll number was lost to a shadow still identifies itself
+    by its number, and nothing on it disagrees. The unread field is reported,
+    not held against the document."""
     outcome = evaluate(upload_input(key, upload(roll_number=None)))
-    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    assert outcome.result is VerificationResult.VERIFIED
+    roll = next(c for c in outcome.checks if c.name == f"{CHECK_FIELD_MATCH}.roll_number")
+    assert roll.state is FieldState.NOT_READ
+    assert roll.status is CheckStatus.UNCERTAIN
     assert statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.roll_number"] is CheckStatus.UNCERTAIN
 
 
@@ -316,14 +334,21 @@ def test_an_unread_field_is_reported_against_the_registry_value(key: Ed25519Priv
     assert "not checked" in detail
 
 
-def test_a_valid_qr_verifies_when_nothing_at_all_was_read(key: Ed25519PrivateKey) -> None:
-    """An unrecognised layout compares no fields. With a valid signature that
-    is still VERIFIED — the registry values stand on the signature, not on the
-    OCR — and the evidence says why nothing was compared."""
+def test_a_valid_qr_does_not_verify_when_nothing_at_all_was_read(key: Ed25519PrivateKey) -> None:
+    """Changed deliberately: this used to be VERIFIED.
+
+    An unrecognised layout compares no fields, so a valid signature was the
+    whole verdict — which told the verifier their document was fine when
+    nothing about *it* had been checked. The signature still proves the
+    record; the document is now reported as unconfirmed instead.
+    """
     evidence = UploadEvidence(sha256=OTHER_SHA, template=None, fields={}, has_text=False)
     outcome = evaluate(qr_input(key, evidence))
-    assert outcome.result is VerificationResult.VERIFIED
-    assert statuses(outcome.checks)[CHECK_FIELD_MATCH] is CheckStatus.UNCERTAIN
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    status = statuses(outcome.checks)
+    assert status[CHECK_QR_SIGNATURE] is CheckStatus.PASS
+    assert status[CHECK_FIELD_MATCH] is CheckStatus.UNCERTAIN
+    assert status[CHECK_DOCUMENT_CONTENT] is CheckStatus.UNCERTAIN
 
 
 def test_a_confident_conflict_beats_a_valid_qr(key: Ed25519PrivateKey) -> None:
@@ -352,8 +377,13 @@ def test_an_invalid_qr_signature_is_a_mismatch_however_well_it_reads(
 
 
 def test_a_low_confidence_conflict_does_not_overturn_a_valid_qr(key: Ed25519PrivateKey) -> None:
-    """Only a *confident* reading may contradict a signature; below the
-    threshold the field is reported as uncertain and the QR carries it."""
+    """Only a *confident* reading may contradict a signature: this is not a
+    MISMATCH and the field stays uncertain.
+
+    It is no longer VERIFIED either, though — the one field read badly here is
+    the student name, so nothing confirms the document belongs to the person
+    the record names. That is the unconfirmed bar, not the conflict rule.
+    """
     outcome = evaluate(
         qr_input(
             key,
@@ -361,8 +391,247 @@ def test_a_low_confidence_conflict_does_not_overturn_a_valid_qr(key: Ed25519Priv
             thresholds=Thresholds(min_field_confidence=0.85),
         )
     )
-    assert outcome.result is VerificationResult.VERIFIED
+    assert outcome.result is not VerificationResult.MISMATCH
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
     assert statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.student_name"] is CheckStatus.UNCERTAIN
+
+
+# --- the three confidence bands -----------------------------------------------
+#
+# The rule these pin: VERIFIED means nothing on the page disagrees. A valid
+# signature proves what the institution issued; it says nothing about what is
+# printed on the paper the verifier is holding.
+
+
+def test_a_moderately_confident_difference_blocks_a_valid_qr(key: Ed25519PrivateKey) -> None:
+    """The bug this fixes: a CGPA printed 9.99 and read at 76% against a
+    registry 9.32 used to pass as VERIFIED on the strength of the QR."""
+    outcome = evaluate(qr_input(key, upload(cgpa="9.99", confidence=0.76)))
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    cgpa = next(c for c in outcome.checks if c.name == f"{CHECK_FIELD_MATCH}.cgpa")
+    assert cgpa.state is FieldState.DIFFERS
+    assert cgpa.status is CheckStatus.UNCERTAIN
+    assert "9.99" in cgpa.detail and "8.50" in cgpa.detail
+
+
+def test_a_confident_difference_is_still_a_mismatch(key: Ed25519PrivateKey) -> None:
+    outcome = evaluate(qr_input(key, upload(cgpa="9.99", confidence=0.94)))
+    assert outcome.result is VerificationResult.MISMATCH
+    cgpa = next(c for c in outcome.checks if c.name == f"{CHECK_FIELD_MATCH}.cgpa")
+    assert cgpa.state is FieldState.DIFFERS
+    assert cgpa.status is CheckStatus.FAIL
+
+
+def test_everything_read_agrees_and_two_fields_were_not_read(key: Ed25519PrivateKey) -> None:
+    """VERIFIED, with the unread fields reported rather than held against it."""
+    outcome = evaluate(qr_input(key, upload(roll_number=None, programme=None)))
+    assert outcome.result is VerificationResult.VERIFIED
+    states = {c.name: c.state for c in outcome.checks if c.state is not None}
+    assert states[f"{CHECK_FIELD_MATCH}.roll_number"] is FieldState.NOT_READ
+    assert states[f"{CHECK_FIELD_MATCH}.programme"] is FieldState.NOT_READ
+    assert states[f"{CHECK_FIELD_MATCH}.cert_number"] is FieldState.MATCHES
+    assert not [c for c in outcome.checks if c.state is FieldState.DIFFERS]
+
+
+def test_the_band_edges_are_the_thresholds_not_approximations(key: Ed25519PrivateKey) -> None:
+    """Exactly at a threshold belongs to the stricter band, so a tuned value
+    means what it says."""
+    thresholds = Thresholds(min_field_confidence=0.85, min_discrepancy_confidence=0.50)
+    at_conflict = evaluate(
+        qr_input(key, upload(cgpa="9.99", confidence=0.85), thresholds=thresholds)
+    )
+    assert at_conflict.result is VerificationResult.MISMATCH
+
+    at_discrepancy = evaluate(
+        qr_input(key, upload(cgpa="9.99", confidence=0.50), thresholds=thresholds)
+    )
+    assert at_discrepancy.result is VerificationResult.MANUAL_REVIEW
+
+    below = evaluate(qr_input(key, upload(cgpa="9.99", confidence=0.49), thresholds=thresholds))
+    assert below.result is VerificationResult.VERIFIED
+
+
+def test_the_thresholds_are_configurable(key: Ed25519PrivateKey) -> None:
+    """An institution that wants every difference looked at can lower the
+    discrepancy band; the engine reads it from the input, never from config."""
+    strict = Thresholds(min_field_confidence=0.85, min_discrepancy_confidence=0.10)
+    outcome = evaluate(qr_input(key, upload(cgpa="9.99", confidence=0.20), thresholds=strict))
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+
+
+def test_the_date_of_issue_is_compared_like_any_other_field(key: Ed25519PrivateKey) -> None:
+    """It is printed on the certificate and signed into the record, so "not
+    checked" was never the right answer for it."""
+    agrees = evaluate(qr_input(key, upload()))
+    issued = next(c for c in agrees.checks if c.name == f"{CHECK_FIELD_MATCH}.issue_date")
+    assert issued.state is FieldState.MATCHES
+
+    differs = evaluate(qr_input(key, upload(issue_date="2023-01-01", confidence=0.95)))
+    assert differs.result is VerificationResult.MISMATCH
+
+
+def test_an_unread_field_never_turns_a_difference_into_a_pass(key: Ed25519PrivateKey) -> None:
+    """One field differing is enough, however much else could not be read."""
+    outcome = evaluate(
+        qr_input(key, upload(cgpa="9.99", confidence=0.70, roll_number=None, programme=None))
+    )
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+
+
+# --- a genuine QR does not verify a document nobody could read ---------------
+#
+# The hole these close: a page carrying a real signed QR used to be VERIFIED
+# whatever was printed beside it, including nothing readable at all. The QR
+# proves the *record*; confirming the *document* needs the student name read
+# and matched, at least `min_matched_fields` critical fields matching, and
+# nothing differing.
+
+
+def content(checks: list[Check]) -> Check:
+    return next(c for c in checks if c.name == CHECK_DOCUMENT_CONTENT)
+
+
+def test_a_genuine_qr_with_no_layout_matched_is_unconfirmed(key: Ed25519PrivateKey) -> None:
+    """The reported bug, in one case: valid NBIT QR, "no known layout
+    matched", every field not checked — and a VERIFIED verdict."""
+    evidence = UploadEvidence(sha256=OTHER_SHA, template=None, fields={})
+    outcome = evaluate(qr_input(key, evidence))
+
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    check = content(outcome.checks)
+    assert check.status is CheckStatus.UNCERTAIN
+    assert "no known layout matched" in check.detail.lower()
+    # Never an accusation: nothing was found against the document.
+    assert outcome.result is not VerificationResult.MISMATCH
+
+
+def test_a_genuine_qr_with_the_name_and_three_fields_verifies(key: Ed25519PrivateKey) -> None:
+    """The bar met exactly: the name, the number and the CGPA, nothing else
+    read, nothing differing."""
+    evidence = upload(roll_number=None, programme=None, year_of_passing=None, issue_date=None)
+    outcome = evaluate(qr_input(key, evidence))
+
+    assert outcome.result is VerificationResult.VERIFIED
+    assert content(outcome.checks).status is CheckStatus.PASS
+    matched = [c for c in outcome.checks if c.state is FieldState.MATCHES]
+    assert len(matched) == 3
+
+
+def test_a_genuine_qr_with_only_two_fields_is_unconfirmed(key: Ed25519PrivateKey) -> None:
+    """One below the bar. The name was read and matched, which is necessary
+    and not sufficient."""
+    evidence = upload(
+        roll_number=None, programme=None, year_of_passing=None, issue_date=None, cgpa=None
+    )
+    outcome = evaluate(qr_input(key, evidence))
+
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    check = content(outcome.checks)
+    assert check.status is CheckStatus.UNCERTAIN
+    assert "2 of the 7" in check.detail
+
+
+def test_a_genuine_qr_without_the_student_name_is_unconfirmed(key: Ed25519PrivateKey) -> None:
+    """Five fields matching is well past the count, and still not enough: the
+    one field that says whose certificate this is was not read."""
+    evidence = upload(student_name=None, issue_date=None)
+    outcome = evaluate(qr_input(key, evidence))
+
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    assert len([c for c in outcome.checks if c.state is FieldState.MATCHES]) == 5
+    check = content(outcome.checks)
+    assert check.status is CheckStatus.UNCERTAIN
+    assert "student name" in check.detail.lower()
+
+
+def test_the_original_pdf_still_verifies_on_its_hash(key: Ed25519PrivateKey) -> None:
+    """The exempt path: the bytes *are* the issued certificate, so there is no
+    separate document to confirm — whatever OCR made of it."""
+    evidence = upload(sha256=ISSUED_SHA, template=None)
+    outcome = evaluate(upload_input(key, evidence))
+
+    assert outcome.result is VerificationResult.VERIFIED
+    assert statuses(outcome.checks)[CHECK_FILE_HASH] is CheckStatus.PASS
+    assert content(outcome.checks).status is CheckStatus.PASS
+
+
+def test_an_exact_certificate_number_alone_no_longer_verifies(key: Ed25519PrivateKey) -> None:
+    """The same hole without a QR: the number read off the page identified the
+    record, but nothing confirmed the rest of the document."""
+    evidence = upload(
+        student_name=None,
+        roll_number=None,
+        programme=None,
+        year_of_passing=None,
+        cgpa=None,
+        issue_date=None,
+    )
+    outcome = evaluate(upload_input(key, evidence))
+
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    assert statuses(outcome.checks)[f"{CHECK_FIELD_MATCH}.cert_number"] is CheckStatus.PASS
+
+
+def test_the_matched_field_count_comes_from_the_input(key: Ed25519PrivateKey) -> None:
+    """Configurable like the confidence bands: the engine reads it from
+    `VerificationInput.thresholds`, never from settings."""
+    evidence = upload(
+        roll_number=None, programme=None, year_of_passing=None, issue_date=None, cgpa=None
+    )
+    lenient = Thresholds(min_matched_fields=2)
+    assert evaluate(qr_input(key, evidence, thresholds=lenient)).result is (
+        VerificationResult.VERIFIED
+    )
+
+    strict = Thresholds(min_matched_fields=7)
+    assert evaluate(qr_input(key, upload(), thresholds=strict)).result is (
+        VerificationResult.VERIFIED
+    ), "all seven match, so even the strictest bar is met"
+    assert evaluate(qr_input(key, upload(cgpa=None), thresholds=strict)).result is (
+        VerificationResult.MANUAL_REVIEW
+    )
+
+
+def test_a_scanned_qr_with_no_document_is_unaffected(key: Ed25519PrivateKey) -> None:
+    """The new bar is about a document presented. Scanning a QR or typing a
+    number presents none, so those paths are untouched and document_content is
+    skipped."""
+    outcome = evaluate(
+        VerificationInput(
+            method=VerificationMethod.QR,
+            cert_number=CERT_NUMBER,
+            record=registry(key),
+            qr=QrPayload(CERT_NUMBER, "TST", sign_record(key, record())),
+        )
+    )
+    assert outcome.result is VerificationResult.VERIFIED
+    assert content(outcome.checks).status is CheckStatus.SKIPPED
+
+
+def test_a_revoked_record_still_outranks_the_new_rule(key: Ed25519PrivateKey) -> None:
+    evidence = UploadEvidence(sha256=OTHER_SHA, template=None, fields={})
+    outcome = evaluate(
+        qr_input(
+            key,
+            evidence,
+            registry_record=registry(key, status="revoked", revoked_at=datetime.now(UTC)),
+        )
+    )
+    assert outcome.result is VerificationResult.REVOKED
+
+
+def test_a_confident_conflict_still_outranks_the_new_rule(key: Ed25519PrivateKey) -> None:
+    """An edited document reads as a MISMATCH, not as merely unconfirmed."""
+    outcome = evaluate(qr_input(key, upload(cgpa="9.90", confidence=0.99)))
+    assert outcome.result is VerificationResult.MISMATCH
+
+
+def test_a_possible_discrepancy_still_reads_as_one(key: Ed25519PrivateKey) -> None:
+    """A field that differs is a discrepancy, not an unconfirmed document: the
+    evidence names the disagreement rather than the missing confirmation."""
+    outcome = evaluate(qr_input(key, upload(cgpa="9.99", confidence=0.70)))
+    assert outcome.result is VerificationResult.MANUAL_REVIEW
+    assert "not agree" in content(outcome.checks).detail
 
 
 # --- identifier comparison ----------------------------------------------------
@@ -404,6 +673,10 @@ def test_no_upload_result_ever_accuses(key: Ed25519PrivateKey) -> None:
 
 
 def test_every_check_detail_is_a_sentence(key: Ed25519PrivateKey) -> None:
+    """`state` is carried by field_match entries only; every check still has
+    the three keys the result page reads."""
     for item in evaluate(upload_input(key, upload())).checks_as_dicts():
-        assert set(item) == {"name", "status", "detail"}
+        assert {"name", "status", "detail"} <= set(item)
+        assert set(item) <= {"name", "status", "detail", "state"}
+        assert ("state" in item) == item["name"].startswith("field_match.")
         assert item["detail"].endswith(".")

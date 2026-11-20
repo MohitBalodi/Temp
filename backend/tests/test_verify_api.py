@@ -72,6 +72,7 @@ def test_genuine_number_verifies_and_is_recorded(
         # Upload-only checks: listed, and skipped because nothing was uploaded.
         "file_hash": "skipped",
         "field_match": "skipped",
+        "document_content": "skipped",
     }
     # The record's fields come back with the result.
     assert body["certificate"]["student_name"] == "Aarav Sharma"
@@ -82,7 +83,7 @@ def test_genuine_number_verifies_and_is_recorded(
     assert stored is not None
     assert stored.verifier_id == users["verifier"].id
     assert stored.certificate_id is not None
-    assert len(stored.checks) == 6
+    assert len(stored.checks) == 7
 
     logged = db.scalars(select(AuditLog).where(AuditLog.action == "verification.create")).all()
     assert len(logged) == 1

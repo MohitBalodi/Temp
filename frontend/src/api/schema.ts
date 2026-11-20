@@ -738,6 +738,11 @@ export interface components {
             status: string;
             /** Detail */
             detail: string;
+            /**
+             * State
+             * @description field_match entries only: matches | differs | not_read — what the document said, as distinct from what the check made of it.
+             */
+            state?: string | null;
         };
         /**
          * ConfirmAndAddDecision

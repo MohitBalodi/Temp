@@ -52,6 +52,13 @@ class CheckOut(BaseModel):
     name: str
     status: str
     detail: str
+    state: str | None = Field(
+        default=None,
+        description=(
+            "field_match entries only: matches | differs | not_read — what the document said, "
+            "as distinct from what the check made of it."
+        ),
+    )
 
 
 class VerifierSummary(BaseModel):
